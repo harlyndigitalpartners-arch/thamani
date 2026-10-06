@@ -1,0 +1,25 @@
+# Data artifacts
+data/thamani.sqlite
+data/*.jsonl.gz
+data/*.jsonl
+runs/*.jsonl
+
+# Python cache & venv
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

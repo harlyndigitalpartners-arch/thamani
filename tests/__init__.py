@@ -1,0 +1,1 @@
+"""Thamani test suite."""
