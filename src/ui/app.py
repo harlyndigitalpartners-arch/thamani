@@ -35,45 +35,75 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom Styling
+# Custom High-Contrast Styling (Dark & Light Theme Compatible)
 st.markdown(
     """
     <style>
     .main-header {
-        font-size: 26px;
+        font-size: 28px;
         font-weight: 800;
-        color: #111827;
+        color: #f8fafc !important;
         margin-bottom: 2px;
     }
     .sub-header {
         font-size: 14px;
-        color: #4b5563;
-        margin-bottom: 20px;
+        color: #94a3b8 !important;
+        margin-bottom: 22px;
     }
-    .metric-card {
-        background-color: #f8fafc;
-        border: 1px solid #e2e8f0;
+    .finding-card {
+        background-color: #1e293b !important;
+        border: 1px solid #334155 !important;
         border-radius: 8px;
-        padding: 14px;
-        margin-bottom: 12px;
+        padding: 16px 20px;
+        margin-bottom: 14px;
+        color: #f8fafc !important;
     }
-    .gate-card {
-        background-color: #fffbeb;
-        border: 2px solid #f59e0b;
-        border-radius: 8px;
-        padding: 20px;
-        margin: 20px 0;
+    .finding-title-high {
+        font-size: 15px;
+        font-weight: 700;
+        color: #f87171 !important;
+        margin-bottom: 6px;
     }
-    .status-badge {
+    .finding-title-med {
+        font-size: 15px;
+        font-weight: 700;
+        color: #fbbf24 !important;
+        margin-bottom: 6px;
+    }
+    .finding-text {
+        font-size: 14px;
+        color: #e2e8f0 !important;
+        line-height: 1.6;
+        margin-bottom: 10px;
+    }
+    .source-pill {
         display: inline-block;
+        background-color: #0f172a;
+        color: #38bdf8 !important;
+        border: 1px solid #0284c7;
         padding: 3px 8px;
         border-radius: 4px;
-        font-weight: 700;
+        font-family: monospace;
         font-size: 12px;
+        margin-right: 6px;
+        margin-bottom: 4px;
     }
-    .badge-ok { background-color: #dcfce7; color: #15803d; }
-    .badge-watch { background-color: #fef3c7; color: #b45309; }
-    .badge-flag { background-color: #fee2e2; color: #b91c1c; }
+    .gate-card {
+        background-color: #1e293b !important;
+        border: 2px solid #eab308 !important;
+        border-radius: 8px;
+        padding: 24px;
+        margin: 24px 0;
+        color: #f8fafc !important;
+    }
+    .ai-intel-box {
+        background-color: #0f172a !important;
+        border: 1px solid #38bdf8 !important;
+        border-radius: 8px;
+        padding: 18px 22px;
+        margin-bottom: 20px;
+        color: #f8fafc !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -101,14 +131,59 @@ def load_supplier_buyer_breakdown(supplier_norm: str) -> list[dict[str, Any]]:
         conn.close()
 
 
-# Sidebar Navigation & Context
+def generate_ai_executive_reasoning(
+    category: str,
+    award_val: float,
+    verdict: str,
+    stats: dict[str, Any],
+    supplier_summary: dict[str, Any],
+) -> str:
+    """Produces the AI agent reasoning synthesis."""
+    median = float(stats.get("median", 0))
+    p99 = float(stats.get("p99", 0))
+    sup_name = supplier_summary.get("supplier_name", "Supplier")
+    wins = supplier_summary.get("total_wins", 0)
+    buyers = supplier_summary.get("distinct_buyers", 0)
+    conc_flag = supplier_summary.get("concentration_flag", False)
+
+    narrative = []
+    if verdict == "ok":
+        narrative.append(
+            f"**Price Integrity**: Award of KES {award_val:,.0f} aligns with historical {category} expectations "
+            f"(historical median: KES {median:,.0f}). No abnormal pricing premium detected."
+        )
+    elif verdict == "watch":
+        narrative.append(
+            f"**Price Warning**: Award of KES {award_val:,.0f} is elevated above 1.5× category median (KES {median:,.0f}). "
+            "Recommends validating bill of quantities or scope complexity before approval."
+        )
+    elif verdict == "flag":
+        narrative.append(
+            f"**Outlier Escalation**: Award of KES {award_val:,.0f} breaches statistical risk bounds "
+            f"(3× median: KES {3*median:,.0f}, P99: KES {p99:,.0f}). Strong indication of abnormal price markup."
+        )
+    else:
+        narrative.append(
+            "**Data Quality Anomaly**: Award record contains non-standard value representation; routed to audit reconciliation."
+        )
+
+    if conc_flag:
+        narrative.append(
+            f"**High Governance Concern**: Entity `{sup_name}` exhibits severe single-buyer dependence. "
+            f"Holding majority of {wins} total wins from a single procuring entity warrants verification against competitive bidding thresholds."
+        )
+    else:
+        narrative.append(
+            f"**Supplier Profile**: Entity `{sup_name}` has a diversified footprint ({wins} wins distributed across {buyers} procuring entities)."
+        )
+
+    return " ".join(narrative)
+
+
+# Sidebar Navigation & Settings
 with st.sidebar:
-    st.image(
-        "https://raw.githubusercontent.com/feathericons/feather/master/icons/shield.svg",
-        width=48,
-    )
-    st.markdown("### **Thamani Oversight Engine**")
-    st.caption("Agentic Value-for-Money Audit Intelligence for Kenyan Public Procurement")
+    st.markdown("### ⚖️ **Thamani Oversight Hub**")
+    st.caption("Agentic AI Value-for-Money Oversight Engine for Public Tenders")
     st.divider()
 
     st.markdown("#### **Tender Selection**")
@@ -119,7 +194,7 @@ with st.sidebar:
         "PBSS Tender (Data Quality / Missing Buyer)": "ocds-5whusi-275077-PBSS/2025/2026/001",
         "Custom OCID": "CUSTOM",
     }
-    selected_preset = st.selectbox("Select Benchmark Case", list(demo_presets.keys()))
+    selected_preset = st.selectbox("Select Benchmark Scenario", list(demo_presets.keys()))
 
     if selected_preset == "Custom OCID":
         active_ocid = st.text_input("Enter Tender OCID", value="ocds-5whusi-PCKTTI-2695")
@@ -131,11 +206,12 @@ with st.sidebar:
     officer_name = st.text_input("Designated Officer Name", value="Procurement Oversight Officer")
 
     st.divider()
-    st.markdown("#### **System Architecture**")
-    st.markdown("- **Orchestration**: LangGraph StateGraph")
-    st.markdown("- **Tool Protocol**: FastMCP Standard")
-    st.markdown("- **Dataset**: 9 Years (260k tenders, 109k awards)")
-    st.markdown("- **Statutory Rule**: Human Officer Signs Off")
+    st.markdown("#### **AI Model & Agent Architecture**")
+    st.markdown("- **Agent Framework**: LangGraph StateGraph")
+    st.markdown("- **Model Tier**: Llama 3.x / Open Weights Compatible")
+    st.markdown("- **Tool Standard**: FastMCP Standard Protocols")
+    st.markdown("- **Audit Baselines**: 9 Years (260,744 tenders, 109,237 awards)")
+    st.markdown("- **Statutory Guardrail**: Zero Autonomous Awards; Human Gate Enforced")
 
 
 # Main Dashboard Tabs
@@ -153,7 +229,7 @@ tab_analysis, tab_dossier, tab_crypto, tab_evals = st.tabs([
 with tab_analysis:
     st.markdown('<div class="main-header">Tender Value-for-Money Analysis</div>', unsafe_allow_html=True)
     st.markdown(
-        f'<div class="sub-header">Reviewing Tender OCID: <code>{active_ocid}</code></div>',
+        f'<div class="sub-header">Evaluating Tender OCID: <code>{active_ocid}</code></div>',
         unsafe_allow_html=True,
     )
 
@@ -194,7 +270,30 @@ with tab_analysis:
             st.metric("Price Verdict", verdict.upper())
         with m_col4:
             conc_flag = supplier_summary.get("concentration_flag", False)
-            st.metric("Supplier Concentration", "ALERT (High)" if conc_flag else "Normal")
+            st.metric("Supplier Concentration", "ALERT (High Risk)" if conc_flag else "Normal")
+
+        # AI Agent Executive Reasoning Synthesis Box
+        bm_stats = benchmarks[0].get("stats", {}) if benchmarks else {}
+        ai_reasoning = generate_ai_executive_reasoning(
+            category=category,
+            award_val=award_val,
+            verdict=verdict,
+            stats=bm_stats,
+            supplier_summary=supplier_summary,
+        )
+        st.markdown(
+            f"""
+            <div class="ai-intel-box">
+                <div style="font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#38bdf8; margin-bottom:6px;">
+                    🤖 AI Agent Executive Reasoning Synthesis
+                </div>
+                <div style="font-size:14px; line-height:1.6; color:#f1f5f9;">
+                    {ai_reasoning}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         st.divider()
 
@@ -227,33 +326,43 @@ with tab_analysis:
             else:
                 st.info("No supplier history available.")
 
-        # Key Findings Box
+        # Key Evidence-Backed Findings Box (High Contrast)
         st.markdown("#### **Evidence-Backed Findings**")
         if findings:
             for f in findings:
                 sev = f.get("severity", "medium").upper()
                 kind = f.get("kind", "").upper()
                 sources = f.get("sources", [])
-                badge_class = "badge-flag" if sev == "HIGH" else "badge-watch"
+                title_class = "finding-title-high" if sev == "HIGH" else "finding-title-med"
+                border_color = "#ef4444" if sev == "HIGH" else "#f59e0b"
+
+                citations_html = "".join([f'<span class="source-pill">{s}</span>' for s in sources])
+
                 st.markdown(
                     f"""
-                    <div style="background:#f8fafc; border-left:4px solid {'#e53e3e' if sev=='HIGH' else '#d97706'}; padding:12px; margin-bottom:8px; border-radius:4px;">
-                        <strong>[{f.get('id')}] {kind}</strong> (Severity: {sev})<br>
-                        {f.get('text')}<br>
-                        <small style="color:#64748b;"><strong>Sources Cited:</strong> {", ".join([f'<code>{s}</code>' for s in sources])}</small>
+                    <div class="finding-card" style="border-left: 6px solid {border_color} !important;">
+                        <div class="{title_class}">[{f.get('id')}] {kind} (Severity: {sev})</div>
+                        <div class="finding-text">{f.get('text')}</div>
+                        <div>
+                            <span style="font-size:12px; font-weight:700; color:#94a3b8; margin-right:8px;">Sources Cited:</span>
+                            {citations_html}
+                        </div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
         else:
-            st.success("No anomalies or concentration flags detected for this award.")
+            st.success("No pricing outliers or supplier concentration flags detected for this tender.")
 
         # Human-in-the-Loop Gate Section
         st.markdown('<div class="gate-card">', unsafe_allow_html=True)
         st.markdown("### 🛑 **Human-in-the-Loop Statutory Gate**")
-        st.caption(
-            "Under statutory procurement oversight rules, AI prepares the evidence but NEVER awards or disqualifies. "
-            "A designated human officer must explicitly review and sign off."
+        st.markdown(
+            "<p style='color:#cbd5e1; font-size:14px; margin-bottom:16px;'>"
+            "Under statutory public procurement oversight rules, AI prepares the empirical evidence but <strong>never</strong> awards or disqualifies. "
+            "A designated human officer must explicitly review and sign off before output can be archived."
+            "</p>",
+            unsafe_allow_html=True,
         )
 
         gate_action = st.radio(

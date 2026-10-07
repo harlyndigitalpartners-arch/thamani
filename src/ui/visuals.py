@@ -3,6 +3,7 @@
 Generates interactive Plotly figures for:
 1. Price Distribution & Benchmark Outlier positioning vs 9-year empirical baselines.
 2. Supplier Win Distribution & Single-Buyer Concentration detection.
+Optimized for high-contrast dark and light themes.
 """
 
 from __future__ import annotations
@@ -30,48 +31,52 @@ def build_price_distribution_figure(
     fig.add_trace(
         go.Box(
             x=[p25, median, p75],
-            name=f"Historical {category.capitalize()} Distribution (9-Yr)",
+            name=f"9-Yr {category.capitalize()} Baseline",
             boxpoints=False,
             orientation="h",
-            marker_color="#2b6cb0",
+            marker_color="#38bdf8",
+            fillcolor="rgba(56, 189, 248, 0.25)",
+            line=dict(color="#38bdf8", width=2),
             hoverinfo="x",
         )
     )
 
     # Reference threshold lines
-    watch_threshold = 1.5 * median
-    flag_threshold = 3.0 * median
-
     fig.add_vline(
         x=median,
         line_dash="dot",
-        line_color="#4a5568",
-        annotation_text=f"Median ({median:,.0f} KES)",
+        line_color="#94a3b8",
+        line_width=1.5,
+        annotation_text=f"Median: {median:,.0f} KES",
         annotation_position="bottom right",
+        annotation_font=dict(color="#cbd5e1", size=11),
     )
 
     fig.add_vline(
         x=p99,
         line_dash="dash",
-        line_color="#e53e3e",
-        annotation_text=f"P99 ({p99:,.0f} KES)",
+        line_color="#ef4444",
+        line_width=1.5,
+        annotation_text=f"P99 Limit: {p99:,.0f} KES",
         annotation_position="top left",
+        annotation_font=dict(color="#f87171", size=11),
     )
 
     # Current award marker
-    marker_color = "#38a169" if verdict == "ok" else ("#dd6b20" if verdict == "watch" else "#e53e3e")
+    marker_color = "#22c55e" if verdict == "ok" else ("#f59e0b" if verdict == "watch" else "#ef4444")
     verdict_label = verdict.upper()
 
     fig.add_trace(
         go.Scatter(
             x=[award_value],
-            y=[f"Historical {category.capitalize()} Distribution (9-Yr)"],
+            y=[f"9-Yr {category.capitalize()} Baseline"],
             mode="markers+text",
-            name="Current Contract Award",
+            name="Current Award Value",
             text=[f"  {award_value:,.0f} KES [{verdict_label}]"],
             textposition="top right",
+            textfont=dict(color="#ffffff", size=12),
             marker=dict(
-                size=18,
+                size=20,
                 color=marker_color,
                 symbol="diamond",
                 line=dict(width=2, color="#ffffff"),
@@ -87,25 +92,42 @@ def build_price_distribution_figure(
             fig.add_trace(
                 go.Scatter(
                     x=near_x,
-                    y=[f"Historical {category.capitalize()} Distribution (9-Yr)"] * len(near_x),
+                    y=[f"9-Yr {category.capitalize()} Baseline"] * len(near_x),
                     mode="markers",
-                    name="5 Nearest Empirical Citations",
+                    name="5 Historical Benchmark Citations",
                     hovertext=near_texts,
-                    marker=dict(size=9, color="#718096", symbol="circle-open"),
+                    marker=dict(size=10, color="#94a3b8", symbol="circle-open", line=dict(width=2)),
                 )
             )
 
     fig.update_layout(
         title=dict(
-            text=f"Price Benchmark Analysis: {category.upper()} (Award: {award_value:,.0f} KES)",
-            font=dict(size=16),
+            text=f"Price Benchmark: {category.upper()} (Award: {award_value:,.0f} KES)",
+            font=dict(size=15, color="#f8fafc"),
         ),
-        xaxis_title="Award Amount (KES, Log Scale)",
-        xaxis_type="log",
+        xaxis=dict(
+            title="Award Amount (KES, Logarithmic Scale)",
+            title_font=dict(color="#cbd5e1"),
+            tickfont=dict(color="#94a3b8"),
+            type="log",
+            gridcolor="#334155",
+        ),
+        yaxis=dict(
+            tickfont=dict(color="#cbd5e1"),
+        ),
+        paper_bgcolor="#1e293b",
+        plot_bgcolor="#0f172a",
         height=320,
         margin=dict(l=40, r=40, t=50, b=40),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        template="plotly_white",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(color="#cbd5e1", size=11),
+        ),
+        template="plotly_dark",
     )
 
     return fig
@@ -117,42 +139,55 @@ def build_supplier_concentration_figure(
 ) -> go.Figure:
     """Builds horizontal bar chart showing top buyer breakdown and concentration."""
     if not buyer_counts:
-        # Placeholder empty figure
         fig = go.Figure()
         fig.update_layout(
             title=f"Supplier History: {supplier_name} (No prior records)",
+            paper_bgcolor="#1e293b",
+            plot_bgcolor="#0f172a",
+            font=dict(color="#f8fafc"),
             height=280,
-            template="plotly_white",
+            template="plotly_dark",
         )
         return fig
 
-    buyers = [b["buyer_name"][:35] + ("..." if len(b["buyer_name"]) > 35 else "") for b in buyer_counts[:8]]
+    buyers = [b["buyer_name"][:32] + ("..." if len(b["buyer_name"]) > 32 else "") for b in buyer_counts[:8]]
     wins = [b["wins"] for b in buyer_counts[:8]]
 
-    # Highlight concentration in red/coral
-    colors = ["#e53e3e" if w >= 8 and idx == 0 else "#3182ce" for idx, w in enumerate(wins)]
+    # Highlight concentration in vibrant red/coral
+    colors = ["#ef4444" if w >= 8 and idx == 0 else "#38bdf8" for idx, w in enumerate(wins)]
 
     fig = go.Figure(
         go.Bar(
             x=wins,
             y=buyers,
             orientation="h",
-            marker=dict(color=colors),
-            text=[f"{w} wins" for w in wins],
+            marker=dict(color=colors, line=dict(width=1, color="#1e293b")),
+            text=[f"  {w} wins" for w in wins],
             textposition="auto",
+            textfont=dict(color="#ffffff", size=11),
         )
     )
 
     fig.update_layout(
         title=dict(
-            text=f"Supplier Historical Award Distribution: {supplier_name}",
-            font=dict(size=15),
+            text=f"Historical Win Distribution: {supplier_name}",
+            font=dict(size=15, color="#f8fafc"),
         ),
-        xaxis_title="Number of Contract Awards Won",
-        yaxis=dict(autorange="reversed"),
-        height=max(260, len(buyers) * 35 + 80),
+        xaxis=dict(
+            title="Number of Historical Awards Won",
+            title_font=dict(color="#cbd5e1"),
+            tickfont=dict(color="#94a3b8"),
+            gridcolor="#334155",
+        ),
+        yaxis=dict(
+            autorange="reversed",
+            tickfont=dict(color="#e2e8f0", size=11),
+        ),
+        paper_bgcolor="#1e293b",
+        plot_bgcolor="#0f172a",
+        height=max(270, len(buyers) * 36 + 70),
         margin=dict(l=40, r=40, t=50, b=40),
-        template="plotly_white",
+        template="plotly_dark",
     )
 
     return fig
