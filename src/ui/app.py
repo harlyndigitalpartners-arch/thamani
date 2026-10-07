@@ -164,22 +164,12 @@ with tab_analysis:
     if run_analysis or ("current_state" in st.session_state and st.session_state.get("active_ocid") == active_ocid):
         if run_analysis:
             with st.spinner("Executing 6-stage LangGraph pipeline..."):
-                try:
-                    # Run up to draft stage (without auto-approving gate)
-                    state = run_pipeline(
-                        ocid=active_ocid,
-                        officer=officer_name,
-                        auto_gate_action=None,  # Leave for interactive UI
-                        interactive=False,
-                    )
-                except Exception as e:
-                    # If stopped at gate, fetch current state
-                    state = run_pipeline(
-                        ocid=active_ocid,
-                        officer=officer_name,
-                        auto_gate_action="approve",  # Generate draft baseline
-                        interactive=False,
-                    )
+                state = run_pipeline(
+                    ocid=active_ocid,
+                    officer=officer_name,
+                    auto_gate_action=None,  # Preview in UI; officer clicks sign below
+                    interactive=False,
+                )
                 st.session_state["current_state"] = state
                 st.session_state["active_ocid"] = active_ocid
 

@@ -488,6 +488,15 @@ def gate_node(state: ThamaniState) -> dict[str, Any]:
             }
         else:
             raise ValueError(f"Unrecognized auto gate action: '{auto_action}'")
+    elif not interactive:
+        # Non-interactive execution without auto_action (e.g. Web UI preview before officer submits sign-off)
+        decision = {
+            "officer_name": officer_name,
+            "decision": "pending",
+            "finding_id": None,
+            "note": "Awaiting gate review in UI.",
+            "ts": ts,
+        }
     else:
         # Interactive loop until valid command
         while True:
