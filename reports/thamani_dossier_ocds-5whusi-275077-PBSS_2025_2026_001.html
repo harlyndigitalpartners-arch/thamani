@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thamani Audit Dossier — ocds-5whusi-275077-PBSS/2025/2026/001</title>
+<style>
+  :root {
+    --ke-green: #006600;
+    --ke-red: #bb0000;
+    --ke-black: #111111;
+    --slate-800: #1e293b;
+    --slate-600: #475569;
+    --slate-100: #f1f5f9;
+    --border-color: #cbd5e1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--slate-800);
+    line-height: 1.5;
+    margin: 0;
+    padding: 24px;
+    background: #f8fafc;
+  }
+  .dossier-card {
+    max-width: 900px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+  }
+  .ke-stripes {
+    height: 8px;
+    background: linear-gradient(to right, var(--ke-black) 33%, var(--ke-red) 33% 66%, var(--ke-green) 66%);
+  }
+  .header {
+    padding: 32px 40px 24px 40px;
+    background: #ffffff;
+    border-bottom: 2px solid var(--slate-100);
+  }
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .agency-title {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--ke-green);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .dossier-headline {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--ke-black);
+    margin: 0 0 8px 0;
+  }
+  .ocid-badge {
+    display: inline-block;
+    background: #e2e8f0;
+    color: #334155;
+    font-family: monospace;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .print-btn {
+    background: var(--ke-green);
+    color: #ffffff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .print-btn:hover { background: #004d00; }
+  
+  .content {
+    padding: 32px 40px;
+  }
+  
+  .risk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .risk-card {
+    padding: 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: #f8fafc;
+  }
+  .risk-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--slate-600);
+    letter-spacing: 0.5px;
+  }
+  .risk-value {
+    font-size: 18px;
+    font-weight: 800;
+    margin-top: 4px;
+  }
+  .risk-ok { color: var(--ke-green); }
+  .risk-watch { color: #d97706; }
+  .risk-flag { color: var(--ke-red); }
+
+  h2 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #0f172a;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 6px;
+    margin-top: 32px;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  
+  ul, ol { padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  
+  .finding-box {
+    background: #fef2f2;
+    border-left: 4px solid var(--ke-red);
+    padding: 12px 16px;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 12px;
+  }
+  .finding-box.normal {
+    background: #f0fdf4;
+    border-left-color: var(--ke-green);
+  }
+  
+  .cert-box {
+    margin-top: 40px;
+    padding: 24px;
+    background: #f8fafc;
+    border: 2px dashed #94a3b8;
+    border-radius: 8px;
+  }
+  .cert-header {
+    font-size: 13px;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--slate-800);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .hash-box {
+    font-family: monospace;
+    font-size: 11px;
+    background: #ffffff;
+    padding: 8px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    word-break: break-all;
+    color: #334155;
+  }
+
+  @media print {
+    body { background: #ffffff; padding: 0; }
+    .dossier-card { box-shadow: none; border: none; max-width: 100%; }
+    .print-btn { display: none; }
+    h2 { page-break-after: avoid; }
+    .cert-box { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="dossier-card">
+  <div class="ke-stripes"></div>
+  
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="agency-title">Republic of Kenya • Public Procurement Oversight</div>
+        <h1 class="dossier-headline">Value-for-Money Audit Dossier</h1>
+        <span class="ocid-badge">OCID: ocds-5whusi-275077-PBSS/2025/2026/001</span>
+      </div>
+      <div>
+        <button class="print-btn" onclick="window.print()">🖨️ Print / Save PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <h1 style='display:none'>Value-for-Money Analysis Briefing: ocds-5whusi-275077-PBSS/2025/2026/001</h1>
+<h2>Award summary</h2>
+<ul style='line-height:1.6;'>
+<li><strong>Tender OCID</strong>: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-275077-PBSS/2025/2026/001</code></li>
+<li><strong>Title</strong>: Supply Of Detergents and General Cleaning Materials</li>
+<li><strong>Procurement Category</strong>: GOODS</li>
+<li><strong>Procuring Entity (Buyer)</strong>: PRECIOUS BLOOD KILUNGU</li>
+</ul>
+<h2>Price analysis</h2>
+<ul style='line-height:1.6;'>
+<li><strong>Verdict</strong>: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>DATA-QUALITY</code></li>
+<li><strong>Assessment</strong>: non-positive award value</li>
+</ul>
+<h2>Supplier history</h2>
+<ul style='line-height:1.6;'>
+<li><strong>Supplier Name</strong>: Concept Coopers (Normalized: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>CONCEPT COOPERS</code>)</li>
+<li><strong>Total Historical Wins</strong>: 2</li>
+<li><strong>Distinct Procuring Entities</strong>: 1</li>
+</ul>
+<h2>Data-quality notes</h2>
+<ul style='line-height:1.6;'>
+<li>Award 20260108151730-152337: non-positive award value</li>
+<li>Award 20260108151730-152337: non-positive award value</li>
+<li>[DQ-VAL-1] Award value data quality anomaly: non-positive award value. (Sources: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-275077-PBSS/2025/2026/001</code>)</li>
+<li>[DQ-VAL-2] Award value data quality anomaly: non-positive award value. (Sources: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-275077-PBSS/2025/2026/001</code>)</li>
+</ul>
+<h3 style='font-size:15px; margin-top:16px;'>Key Findings &amp; Citations</h3>
+<ul style='line-height:1.6;'>
+<li><strong>[DQ-VAL-1] [DATA-QUALITY] (Severity: MEDIUM)</strong>: Award value data quality anomaly: non-positive award value. — <em>Sources: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-275077-PBSS/2025/2026/001</code></em></li>
+<li><strong>[DQ-VAL-2] [DATA-QUALITY] (Severity: MEDIUM)</strong>: Award value data quality anomaly: non-positive award value. — <em>Sources: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-275077-PBSS/2025/2026/001</code></em></li>
+</ul>
+<h2>Officer decision</h2>
+<p><em>[Awaiting review by the designated procurement officer via CLI gate. Decision must be explicitly recorded before finalization.]</em></p>
+
+    <div class="cert-box">
+      <div class="cert-header">
+        <span>Official Verification & Cryptographic Certificate</span>
+        <span>STATUS: VERIFIED &amp; ARCHIVED</span>
+      </div>
+      <p style="margin: 0 0 8px 0; font-size: 13px;">
+        This audit briefing was processed through the Thamani LangGraph governance engine and verified by a designated oversight officer under strict human-in-the-loop statutory controls.
+      </p>
+      <div style="font-size: 12px; margin-bottom: 6px;">
+        <strong>Reviewing Officer:</strong> Procurement Officer &nbsp;|&nbsp; 
+        <strong>Action:</strong> OVERRIDE &nbsp;|&nbsp; 
+        <strong>Timestamp:</strong> 2026-10-07T21:19:46.363720+00:00
+      </div>
+      <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-top: 10px; margin-bottom: 4px;">SHA-256 Tamper-Proof Cryptographic Signature:</div>
+      <div class="hash-box">f0b4157db72ceea4ce5cef86f17dfe6b1d9cc8fb2390018f3aac8ca6cf32989c</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

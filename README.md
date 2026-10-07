@@ -139,6 +139,12 @@ python -m src.agent.loop --benchmark --category works --value 500000000
 python -m src.agent.loop --eval
 ```
 
+### Run the Interactive Auditor Web Dashboard
+```bash
+streamlit run src/ui/app.py
+```
+*Launches the browser-based auditor interface featuring interactive Plotly price distribution curves, supplier concentration network graphs, live Human Gate controls, official printable dossiers, and cryptographic seal verification.*
+
 ---
 
 ## 11. Evaluation Results Summary

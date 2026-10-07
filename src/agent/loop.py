@@ -25,6 +25,8 @@ from typing import Any, Callable, Literal, TypedDict
 
 from langgraph.graph import END, StateGraph
 
+from src.agent.crypto_seal import generate_gate_record_with_seal
+from src.export.dossier import export_dossier_to_file
 from src.thamani_server.ocds import norm_name
 from src.thamani_server.server import (
     DEFAULT_DB_PATH,
@@ -80,6 +82,7 @@ class ThamaniState(TypedDict, total=False):
     data_quality_notes: list[str]
     draft: str
     gate_decision: dict[str, Any]
+    seal_hash: str
     final_report_path: str
     run_log: list[dict[str, Any]]
     error: str | None
@@ -574,41 +577,43 @@ def finalize_node(state: ThamaniState) -> dict[str, Any]:
     gate_note = gate.get("note", "N/A")
     override_id = gate.get("finding_id")
 
-    # Attach official Gate Verification Record
-    gate_record = [
-        "",
-        "---",
-        "## Officer Gate Verification Record",
-        f"- **Reviewing Officer**: {officer}",
-        f"- **Verification Decision**: `{decision_type.upper()}`",
-        f"- **Timestamp**: `{gate.get('ts')}`",
-    ]
-    if decision_type == "override":
-        gate_record.append(f"- **Officer Override Finding Target**: `{override_id}`")
-        gate_record.append(f"- **Officer Formal Determination**: {gate_note}")
-    else:
-        gate_record.append(f"- **Officer Remarks**: {gate_note}")
+    # Attach official Gate Verification Record with Cryptographic Seal
+    gate_record_str, seal_hash = generate_gate_record_with_seal(
+        content_to_seal=draft,
+        officer_name=officer,
+        decision_type=decision_type,
+        timestamp=gate.get("ts", ts),
+        override_id=override_id,
+        note=gate_note,
+    )
 
-    gate_record.append("- **Audit Status**: VERIFIED & LOCKED FOR ARCHIVAL")
-    gate_record.append("---")
-
-    final_content = draft + "\n" + "\n".join(gate_record)
+    final_content = draft + "\n" + gate_record_str
 
     # Use borrowed filesystem MCP client to write report to disk
     fs_client = FilesystemMCPClient("reports")
     filename = f"thamani_briefing_{ocid}.md"
     saved_path = fs_client.write_file(filename, final_content)
 
+    # Also export official executive HTML dossier
+    dossier_filename = f"thamani_dossier_{re.sub(r'[^\w\-.]', '_', ocid)}.html"
+    dossier_path = Path("reports") / dossier_filename
+    export_dossier_to_file(final_content, dossier_path, ocid=ocid)
+
     log_entry = {
         "ts": ts,
         "node": "finalize",
-        "inputs_summary": {"destination": str(saved_path)},
+        "inputs_summary": {"destination": str(saved_path), "dossier": str(dossier_path)},
         "outputs_summary": {"finalized": True, "file_size": len(final_content)},
     }
     run_log.append(log_entry)
     logger.info(f"[FINALIZE] Briefing successfully finalized to {saved_path}")
+    logger.info(f"[FINALIZE] Executive dossier exported to {dossier_path}")
 
-    return {"final_report_path": str(saved_path), "run_log": run_log}
+    return {
+        "final_report_path": str(saved_path),
+        "seal_hash": seal_hash,
+        "run_log": run_log,
+    }
 
 
 # -----------------------------------------------------------------------------
