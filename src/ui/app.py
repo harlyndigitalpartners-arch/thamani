@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import io
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import streamlit as st
 
 from src.agent.crypto_seal import verify_report_integrity
-from src.agent.loop import run_pipeline
+from src.agent.loop import finalize_reviewed_state, run_pipeline
 from src.export.dossier import generate_dossier_html
 from src.thamani_server.server import (
     DEFAULT_DB_PATH,
@@ -208,7 +209,7 @@ with st.sidebar:
     st.divider()
     st.markdown("#### **AI Model & Agent Architecture**")
     st.markdown("- **Agent Framework**: LangGraph StateGraph")
-    st.markdown("- **Model Tier**: Llama 3.x / Open Weights Compatible")
+    st.markdown(f"- **Review Focus Model**: {os.getenv('THAMANI_MODEL') or 'Disabled (deterministic analysis)'}")
     st.markdown("- **Tool Standard**: FastMCP Standard Protocols")
     st.markdown("- **Audit Baselines**: 9 Years (260,744 tenders, 109,237 awards)")
     st.markdown("- **Statutory Guardrail**: Zero Autonomous Awards; Human Gate Enforced")
@@ -243,6 +244,7 @@ with tab_analysis:
                 state = run_pipeline(
                     ocid=active_ocid,
                     officer=officer_name,
+                    model=os.getenv("THAMANI_MODEL") or None,
                     auto_gate_action=None,  # Preview in UI; officer clicks sign below
                     interactive=False,
                 )
@@ -389,14 +391,12 @@ with tab_analysis:
                 cmd = "reject"
 
             with st.spinner("Applying cryptographic seal and finalizing briefing..."):
-                final_state = run_pipeline(
-                    ocid=active_ocid,
-                    officer=officer_name,
-                    auto_gate_action=cmd,
-                    interactive=False,
-                )
+                final_state = finalize_reviewed_state(state, officer_name, cmd)
                 st.session_state["final_state"] = final_state
-                st.success("Briefing successfully signed, sealed with SHA-256 hash, and archived!")
+                if final_state.get("final_report_path"):
+                    st.success("Briefing signed, sealed with SHA-256 hash, and archived.")
+                else:
+                    st.info("Briefing rejected; no final report was archived.")
 
         st.markdown("</div>", unsafe_allow_html=True)
 

@@ -55,6 +55,7 @@ Thamani combines open-source orchestration with fast embedded data querying and 
 - **Tool Protocol**: **FastMCP** (Model Context Protocol standard) exposing reusable analysis tools.
 - **Embedded Database**: Local SQLite database with Write-Ahead Logging (WAL) and category-indexed caching.
 - **Execution Log**: Append-only telemetry written to `runs/<utc-timestamp>.jsonl`.
+- **Model-assisted review focus**: Optional NVIDIA-hosted open-weight Nemotron model selects which computed finding an officer should inspect first. Its free-form prose is not used as evidence.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for full architectural schematics and component interaction flowcharts.
 
@@ -124,6 +125,16 @@ All workflows are accessible through `python -m src.agent.loop`:
 python -m src.agent.loop --award ocds-5whusi-1033 --officer "Jane Doe, CPO"
 ```
 
+### Run with NVIDIA Nemotron
+Set `NVIDIA_API_KEY` or `NVIDIA_API_KEY_FILE` in your shell, then select the model:
+
+```powershell
+$env:NVIDIA_API_KEY_FILE = Join-Path $env:USERPROFILE 'Downloads\nvidia.txt'
+python -m src.agent.loop --award ocds-5whusi-1033 --officer "Jane Doe, CPO" --model nvidia/nemotron-3.5-lightning-30b-a3b
+```
+
+The model call selects a review area and an existing finding ID. Thamani validates the selection and inserts the original computed finding with its OCID citations. The CLI still waits for the officer's decision before writing a final report. For the dashboard, set `THAMANI_MODEL` to the same model ID before starting Streamlit.
+
 ### Run the Deterministic 3-Case Demo
 ```bash
 python -m src.agent.loop --demo
@@ -159,7 +170,7 @@ The test harness runs all 9 specification tasks **3× each**:
 | 5 | Missing buyer name logs warning and completes without crashing | **PASS** |
 | 6 | Absurd value (>1000× median) triggers `data-quality` flag, not price verdict | **PASS** |
 | 7 | Officer override at gate permanently recorded in final report | **PASS** |
-| 8 | Full 6-stage pipeline completes under open-weights / deterministic planner | **PASS** |
+| 8 | NVIDIA open-weight model called; pipeline reaches pending officer gate (3/3 live runs) | **PASS** |
 | 9 | Synthetic mixed-currency case (Foreign FX normalization) | **EXPECTED FAIL** |
 
 See [`EVALS.md`](EVALS.md) for full run traces and the documented honest failure rationale for Task 9.

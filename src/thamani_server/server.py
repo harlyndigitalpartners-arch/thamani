@@ -33,7 +33,16 @@ def get_db_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
     """Open a read-only or read-write SQLite connection with WAL mode."""
     target = Path(db_path or DEFAULT_DB_PATH)
     if not target.exists():
-        raise FileNotFoundError(f"Thamani database not found at {target}. Run ocds.py first.")
+        gz_target = target.with_name(target.name + ".gz")
+        if gz_target.exists():
+            import gzip
+            import shutil
+            logger.info(f"Extracting compressed database {gz_target} to {target}...")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with gzip.open(gz_target, "rb") as f_in, open(target, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        else:
+            raise FileNotFoundError(f"Thamani database not found at {target}. Run ocds.py first.")
     conn = sqlite3.connect(str(target))
     conn.row_factory = sqlite3.Row
     return conn

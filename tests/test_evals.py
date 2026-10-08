@@ -15,6 +15,7 @@ Executes the 9 specified evaluation tasks 3x each with majority verdict:
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from typing import Any
 
@@ -113,15 +114,20 @@ def eval_task_7() -> bool:
 
 
 def eval_task_8() -> bool:
-    """8. Full run on Llama 3.x / Open weights -> completes fetch -> benchmark -> draft -> gate."""
+    """8. NVIDIA open-weight run reaches the officer gate with a real model call."""
+    model = os.getenv("THAMANI_MODEL")
+    if not model or not (os.getenv("NVIDIA_API_KEY") or os.getenv("NVIDIA_API_KEY_FILE")):
+        return False
     state = run_pipeline(
         ocid="ocds-5whusi-1033",
-        auto_gate_action="approve",
         interactive=False,
+        model=model,
     )
     nodes_executed = [entry["node"] for entry in state.get("run_log", [])]
-    required_nodes = {"plan", "fetch", "benchmark", "supplier_check", "draft", "gate", "finalize"}
-    return required_nodes.issubset(set(nodes_executed)) and bool(state.get("draft"))
+    required_nodes = {"plan", "fetch", "benchmark", "supplier_check", "model", "draft", "gate", "finalize"}
+    return (required_nodes.issubset(set(nodes_executed)) and bool(state.get("draft"))
+            and state.get("gate_decision", {}).get("decision") == "pending"
+            and not state.get("final_report_path"))
 
 
 def eval_task_9() -> bool:
@@ -148,7 +154,7 @@ TASKS = [
     (5, "Missing buyer name -> logged warning, no crash", eval_task_5, "PASS"),
     (6, "Absurd value (1000x norm) -> data-quality verdict", eval_task_6, "PASS"),
     (7, "Officer override at gate -> logged with id/ts/note in final", eval_task_7, "PASS"),
-    (8, "Full run on open weights -> completes all 6 stages", eval_task_8, "PASS"),
+    (8, "NVIDIA model call -> pending human gate", eval_task_8, "PASS"),
     (9, "Synthetic mixed-currency case -> EXPECTED FAIL", eval_task_9, "FAIL"),
 ]
 

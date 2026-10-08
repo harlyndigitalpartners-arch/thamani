@@ -82,7 +82,7 @@ Graph nodes: `plan → fetch → benchmark → supplier_check → draft → gate
 - `supplier_check` (plain Python node, no LLM needed): group awards by `supplier_name_norm`, count wins + distinct buyers per supplier; flag concentration when one supplier has ≥8 wins from a single buyer; merge name variants via `norm_name()` and note the merge.
 - `gate`: print the draft to the terminal; prompt `approve | override <finding-id> <note> | reject`. Loop until one is entered. Record `{officer_name, decision, note, ts}` — officer name from `--officer` CLI flag (default `"Procurement Officer"`).
 - `finalize`: unreachable unless `gate_decision ∈ {approve, override}`. Writes the final briefing (draft + gate record appended) via the filesystem MCP server.
-- Model: Llama 3.x via Ollama for the full run (required — one complete task must run on open weights). Support `--model` to also run a frontier model for the comparison the form asks about. Benchmarks and supplier checks are computed, never generated.
+- Model: NVIDIA-hosted open-weight Nemotron via `--model nvidia/nemotron-3.5-lightning-30b-a3b`. The model selects an existing finding for officer review; benchmarks, supplier checks, finding text, and citations are computed or retrieved, never generated. API credentials come from `NVIDIA_API_KEY` or `NVIDIA_API_KEY_FILE`.
 
 ## 7. CLI (`python -m src.agent.loop`)
 - `--award <OCID>` — full end-to-end run on one award.
@@ -100,7 +100,7 @@ EVALS.md tasks 1–9:
 5. Missing buyer name → logged warning, no crash.
 6. Absurd value (1000× norm) → data-quality, not a price verdict.
 7. Officer override at gate → logged with identity/ts/note; final reflects the human.
-8. Full run on Llama 3.x → completes fetch → benchmark → draft → gate.
+8. Full run with NVIDIA Nemotron → completes fetch → benchmark → model focus → draft → pending human gate.
 9. Synthetic mixed-currency case → EXPECTED FAIL. Implement the data-quality verdict path (§4.2) but do not build FX normalization. Document in EVALS.md what was tried and what is next (currency inference → historical FX join → low-confidence manual-review flag).
 
 Run-to-run variation: run each task 3×; the planner template is fixed so findings are deterministic given the pinned database snapshot (data/thamani.sqlite built 2026-10-06).
@@ -118,14 +118,14 @@ Run-to-run variation: run each task 3×; the planner template is fixed so findin
 2. `server.py`: implement `price_benchmark` (§4.2). Unit-test the verdict boundaries.
 3. `loop.py`: LangGraph graph with stub LLM; wire the three tools; get `--benchmark` working.
 4. `loop.py`: `supplier_check` node + `briefing_draft` validation gate (§4.3).
-5. `loop.py`: human gate + finalize via borrowed filesystem server. Wire Ollama/Llama; first full `--demo` run.
+5. `loop.py`: human gate + finalize via borrowed filesystem server. Wire NVIDIA Nemotron; first full model-assisted review run.
 6. `--eval` harness; run EVALS.md 3×; fill in real results; write the task-9 failure note honestly.
 7. Record the demo video (§9). Verify README's 13 sections are all true. Finalize ARCHITECTURE.md.
 
 ## 11. Definition of Done
 - [ ] Fresh clone → `pip install -r requirements.txt` → rebuild DB (one command, §2) → `python -m src.agent.loop --demo` completes with the gate.
 - [ ] 3 own MCP tools callable; 1 borrowed server wired; every tool call logged.
-- [ ] One full run on Llama 3.x, log in `runs/`.
+- [x] Three NVIDIA Nemotron runs reached the pending human gate, with model calls recorded in `runs/`.
 - [ ] EVALS.md filled with real results; exactly one documented unfixed failure.
 - [ ] Demo video <3 min, unedited, tool calls on screen.
 - [ ] Public repo, MIT licence, one-page ARCHITECTURE.md, honest README.

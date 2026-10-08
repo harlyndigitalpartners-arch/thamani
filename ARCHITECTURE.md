@@ -41,3 +41,4 @@ Provides three analysis tools accessible via the Model Context Protocol:
 - **State Machine**: Strongly typed `ThamaniState` holding records, benchmarks, findings, and immutable run logs.
 - **Human-in-the-Loop Gate**: CLI interface halting execution until the named procurement officer enters `approve`, `override <finding-id> <note>`, or `reject`.
 - **Audit Logging**: Every state transition appends execution telemetry to `runs/<utc-timestamp>.jsonl`.
+- **Model Review Focus**: When `--model` is supplied, NVIDIA Nemotron selects a review area and an existing finding ID. The selection is validated against computed findings before the original finding and its OCID sources appear in the draft. Model calls are recorded in the run log.

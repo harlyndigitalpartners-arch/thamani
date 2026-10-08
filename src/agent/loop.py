@@ -26,6 +26,7 @@ from typing import Any, Callable, Literal, TypedDict
 from langgraph.graph import END, StateGraph
 
 from src.agent.crypto_seal import generate_gate_record_with_seal
+from src.agent.nvidia_model import DEFAULT_NVIDIA_MODEL, select_review_focus
 from src.export.dossier import export_dossier_to_file
 from src.thamani_server.ocds import norm_name
 from src.thamani_server.server import (
@@ -71,6 +72,7 @@ class FilesystemMCPClient:
 class ThamaniState(TypedDict, total=False):
     ocid: str
     officer: str
+    model: str | None
     auto_gate_action: str | None
     interactive: bool
     plan_steps: list[dict[str, Any]]
@@ -413,11 +415,40 @@ def draft_node(state: ThamaniState) -> dict[str, Any]:
         return {"error": err_msg, "draft": "", "run_log": run_log}
 
     draft_text = res.get("draft", "")
+    model = state.get("model")
+    model_focus = None
+    if model:
+        model_focus = select_review_focus(
+            model=model,
+            ocid=state["ocid"],
+            findings=findings,
+            benchmark=primary_bm,
+            supplier=sup_summary,
+        )
+        selected = next((f for f in findings if f.get("id") == model_focus["finding_id"]), None)
+        focus_lines = [
+            "## Model-assisted review focus",
+            f"- **Model**: `{model}`",
+            f"- **Area for officer review**: {model_focus['focus_area']}",
+        ]
+        if selected:
+            citations = ", ".join(f"`{source}`" for source in selected["sources"])
+            focus_lines.append(f"- **Finding to inspect first**: [{selected['id']}] {selected['text']}")
+            focus_lines.append(f"- **Sources**: {citations}")
+        draft_text = draft_text.replace(
+            "## Officer decision", "\n".join(focus_lines) + "\n\n## Officer decision", 1
+        )
+        run_log.append({
+            "ts": utc_now_iso(),
+            "node": "model",
+            "inputs_summary": {"provider": "nvidia", "model": model, "findings_count": len(findings)},
+            "outputs_summary": model_focus,
+        })
     run_log.append({
         "ts": ts,
         "node": "draft",
         "inputs_summary": {"findings_count": len(findings)},
-        "outputs_summary": {"valid": True, "draft_length": len(draft_text)},
+        "outputs_summary": {"valid": True, "draft_length": len(draft_text), "model_focus": model_focus},
     })
     logger.info(f"[DRAFT] Generated structured briefing markdown ({len(draft_text)} chars)")
     return {"draft": draft_text, "run_log": run_log}
@@ -685,12 +716,14 @@ def run_pipeline(
     officer: str = "Procurement Officer",
     auto_gate_action: str | None = None,
     interactive: bool = True,
+    model: str | None = None,
 ) -> ThamaniState:
     """Execute end-to-end Thamani analysis loop on an award OCID."""
     app = build_thamani_graph()
     initial_state: ThamaniState = {
         "ocid": ocid,
         "officer": officer,
+        "model": model,
         "auto_gate_action": auto_gate_action,
         "interactive": interactive,
         "run_log": [],
@@ -702,10 +735,21 @@ def run_pipeline(
     return result
 
 
+def finalize_reviewed_state(state: ThamaniState, officer: str, action: str) -> ThamaniState:
+    """Apply the UI officer decision to the exact draft already shown for review."""
+    if state.get("gate_decision", {}).get("decision") != "pending" or not state.get("draft"):
+        raise ValueError("Only a pending, drafted briefing can be reviewed")
+    reviewed: ThamaniState = {**state, "officer": officer, "auto_gate_action": action, "interactive": False}
+    reviewed.update(gate_node(reviewed))
+    reviewed.update(finalize_node(reviewed))
+    persist_run_log(reviewed.get("run_log", []))
+    return reviewed
+
+
 # -----------------------------------------------------------------------------
 # Demo Scenario (§9)
 # -----------------------------------------------------------------------------
-def run_demo(officer: str = "Procurement Officer"):
+def run_demo(officer: str = "Procurement Officer", model: str | None = None):
     """Runs the fixed demo scenario (<3 min demo video):
 
     1. AMARK concentration case (ocds-5whusi-PCKTTI-2695)
@@ -721,6 +765,7 @@ def run_demo(officer: str = "Procurement Officer"):
     res1 = run_pipeline(
         ocid="ocds-5whusi-PCKTTI-2695",
         officer=officer,
+        model=model,
         auto_gate_action="override SC-CONC-1 Supplier verified under specialized technical mandate; single-bidder justification accepted.",
         interactive=False,
     )
@@ -730,6 +775,7 @@ def run_demo(officer: str = "Procurement Officer"):
     res2 = run_pipeline(
         ocid="ocds-5whusi-1033",
         officer=officer,
+        model=model,
         auto_gate_action="approve",
         interactive=False,
     )
@@ -739,6 +785,7 @@ def run_demo(officer: str = "Procurement Officer"):
     res3 = run_pipeline(
         ocid="ocds-5whusi-275077-PBSS/2025/2026/001",
         officer=officer,
+        model=model,
         auto_gate_action="override DQ-VAL-1 Data reporting omission by procuring school; procurement flagged for record reconciliation.",
         interactive=False,
     )
@@ -763,7 +810,7 @@ def main():
     parser.add_argument("--currency", default="KES", help="Currency code (default KES)")
     parser.add_argument("--officer", default="Procurement Officer", help="Designated officer name at the gate")
     parser.add_argument("--auto-gate", help="Automated gate action for tests/demo (e.g. 'approve', 'override <id> <note>', 'reject')")
-    parser.add_argument("--model", default="llama3", help="LLM model identifier")
+    parser.add_argument("--model", default=None, help=f"NVIDIA model ID, for example {DEFAULT_NVIDIA_MODEL}")
 
     args = parser.parse_args()
 
@@ -776,7 +823,7 @@ def main():
         sys.exit(0)
 
     if args.demo:
-        run_demo(officer=args.officer)
+        run_demo(officer=args.officer, model=args.model)
         sys.exit(0)
 
     if args.eval:
@@ -790,6 +837,7 @@ def main():
             officer=args.officer,
             auto_gate_action=args.auto_gate,
             interactive=(args.auto_gate is None),
+            model=args.model,
         )
         sys.exit(0)
 

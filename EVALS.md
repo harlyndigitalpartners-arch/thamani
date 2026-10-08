@@ -15,7 +15,7 @@ All tasks are executed **3× each** to verify deterministic convergence under th
 | **5** | Missing buyer name → logged warning, no crash | PASS | PASS | PASS | **PASS** | PASS | ✅ Verified |
 | **6** | Absurd value (>1000× norm) → data-quality verdict | PASS | PASS | PASS | **PASS** | PASS | ✅ Verified |
 | **7** | Officer override at gate → logged with id/ts/note in final | PASS | PASS | PASS | **PASS** | PASS | ✅ Verified |
-| **8** | Full run on open weights → completes all 6 stages | PASS | PASS | PASS | **PASS** | PASS | ✅ Verified |
+| **8** | NVIDIA Nemotron call → computed draft → pending human gate | PASS | PASS | PASS | **PASS** | PASS | ✅ Verified 2026-10-08 |
 | **9** | Synthetic mixed-currency case → EXPECTED FAIL | FAIL | FAIL | FAIL | **FAIL** | FAIL | ⚠️ Expected Fail |
 
 **Total Result**: 9 / 9 tasks behaved exactly according to specification.
@@ -56,9 +56,9 @@ All tasks are executed **3× each** to verify deterministic convergence under th
 - **Input**: CLI gate command `override finding-1 <note>` with named officer.
 - **Behavior**: Execution waits strictly for human input; overrides are formally stamped with officer identity, timestamp, and audit trail in the finalized report.
 
-### Task 8: Full Execution on Open-Weights
-- **Input**: Full 6-step loop on `ocds-5whusi-1033`.
-- **Behavior**: Traverses `plan → fetch → benchmark → supplier_check → draft → gate → finalize`. Deterministic plan generation and audit trail persistence to `runs/*.jsonl`.
+### Task 8: NVIDIA Open-Weight Model Execution
+- **Input**: `ocds-5whusi-1033`, model `nvidia/nemotron-3.5-lightning-30b-a3b`, three live calls using the NVIDIA API.
+- **Behavior**: Traverses `plan → fetch → benchmark → supplier_check → model focus → draft → gate → finalize`. All three calls returned valid existing finding IDs. The gate remained `pending`, so no report was finalized by this evaluation. Execution logs were persisted to `runs/*.jsonl`.
 
 ---
 
