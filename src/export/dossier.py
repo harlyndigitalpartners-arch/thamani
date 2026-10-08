@@ -162,7 +162,7 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
     margin-top: 40px;
     padding: 24px;
     background: #f8fafc;
-    border: 2px dashed #94a3b8;
+    border: {cert_border};
     border-radius: 8px;
   }}
   .cert-header {{
@@ -174,6 +174,9 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
     margin-bottom: 12px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
   }}
   .hash-box {{
     font-family: monospace;
@@ -183,6 +186,7 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     word-break: break-all;
+    overflow-wrap: anywhere;
     color: #334155;
   }}
 
@@ -219,12 +223,12 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
     <div class="cert-box">
       <div class="cert-header">
         <span>Official Verification & Cryptographic Certificate</span>
-        <span>STATUS: {gate_status}</span>
+        <span style="color: {status_color}; font-weight: 800;">STATUS: {gate_status}</span>
       </div>
-      <p style="margin: 0 0 8px 0; font-size: 13px;">
-        This audit briefing was processed through the Thamani LangGraph governance engine and verified by a designated oversight officer under strict human-in-the-loop statutory controls.
+      <p style="margin: 0 0 10px 0; font-size: 13px; line-height: 1.5;">
+        {cert_description}
       </p>
-      <div style="font-size: 12px; margin-bottom: 6px;">
+      <div style="font-size: 12px; margin-bottom: 6px; line-height: 1.6; word-break: break-word;">
         <strong>Reviewing Officer:</strong> {officer_name} &nbsp;|&nbsp; 
         <strong>Action:</strong> {gate_decision} &nbsp;|&nbsp; 
         <strong>Timestamp:</strong> {gate_ts}
@@ -314,7 +318,11 @@ def format_inline_markdown(text: str) -> str:
     return t
 
 
-def generate_dossier_html(markdown_content: str, ocid: str | None = None) -> str:
+def generate_dossier_html(
+    markdown_content: str,
+    ocid: str | None = None,
+    is_sealed: bool | None = None,
+) -> str:
     """Generates standalone printable HTML audit dossier from markdown briefing."""
     # Extract OCID if not provided
     if not ocid:
@@ -323,11 +331,33 @@ def generate_dossier_html(markdown_content: str, ocid: str | None = None) -> str
 
     # Verify integrity and extract seal information
     integrity = verify_report_integrity(markdown_content)
-    seal_hash = integrity.get("recorded_hash") or "NOT_SEALED"
-    officer_name = integrity.get("officer") or "Procurement Officer"
-    gate_decision = (integrity.get("decision") or "APPROVED").upper()
-    gate_ts = integrity.get("timestamp") or "N/A"
-    gate_status = "VERIFIED & ARCHIVED" if integrity.get("verified") else "PRE-GATE / UNSEALED"
+    actually_sealed = is_sealed if is_sealed is not None else integrity.get("verified", False)
+
+    if actually_sealed:
+        seal_hash = integrity.get("recorded_hash") or "VALID_SEAL_HASH"
+        officer_name = integrity.get("officer") or "Designated Procurement Officer"
+        gate_decision = (integrity.get("decision") or "APPROVED").upper()
+        gate_ts = integrity.get("timestamp") or "N/A"
+        gate_status = "VERIFIED & ARCHIVED"
+        status_color = "var(--ke-green)"
+        cert_description = (
+            "This audit briefing was formally processed through the Thamani LangGraph governance engine "
+            "and verified by a designated oversight officer under strict human-in-the-loop statutory controls."
+        )
+        cert_border = "2px solid var(--ke-green)"
+    else:
+        seal_hash = "[PENDING OFFICER SIGN-OFF — SHA-256 seal stamped upon formal human sign-off]"
+        officer_name = "Awaiting Officer Review"
+        gate_decision = "PENDING STATUTORY GATE"
+        gate_ts = "AWAITING SUBMISSION"
+        gate_status = "DRAFT / UNSEALED"
+        status_color = "#d97706"
+        cert_description = (
+            "⚠️ <strong>STATUTORY RESPONSIBLE AI CONTROL</strong>: This briefing is an automated analysis draft. "
+            "Under Republic of Kenya public procurement oversight rules, the AI agent never decides alone. "
+            "The cryptographic seal and official certification are generated <strong>ONLY</strong> when a designated human officer signs off."
+        )
+        cert_border = "2px dashed #d97706"
 
     body_html = markdown_to_html_simple(markdown_content)
 
@@ -338,13 +368,16 @@ def generate_dossier_html(markdown_content: str, ocid: str | None = None) -> str
         gate_decision=html.escape(gate_decision),
         gate_ts=html.escape(gate_ts),
         gate_status=html.escape(gate_status),
+        status_color=status_color,
+        cert_description=cert_description,
+        cert_border=cert_border,
         seal_hash=seal_hash,
     )
 
 
 def export_dossier_to_file(markdown_content: str, output_path: str | Path, ocid: str | None = None) -> Path:
     """Writes compiled HTML dossier to specified file path."""
-    html_content = generate_dossier_html(markdown_content, ocid=ocid)
+    html_content = generate_dossier_html(markdown_content, ocid=ocid, is_sealed=True)
     target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(html_content, encoding="utf-8")

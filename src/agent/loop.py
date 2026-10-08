@@ -80,6 +80,7 @@ class ThamaniState(TypedDict, total=False):
     awards: list[dict[str, Any]]
     benchmarks: list[dict[str, Any]]
     supplier_summary: dict[str, Any]
+    all_suppliers: list[dict[str, Any]]
     findings: list[dict[str, Any]]
     data_quality_notes: list[str]
     draft: str
@@ -268,6 +269,7 @@ def supplier_check_node(state: ThamaniState) -> dict[str, Any]:
 
     conn = get_db_connection()
     supplier_summary: dict[str, Any] = {}
+    all_suppliers: list[dict[str, Any]] = []
 
     try:
         cursor = conn.cursor()
@@ -350,15 +352,27 @@ def supplier_check_node(state: ThamaniState) -> dict[str, Any]:
                     "sources": evidence_ocids,
                 })
 
-            supplier_summary = {
+            sup_item = {
+                "award_id": aw.get("award_id"),
+                "award_value": aw.get("value_amount", 0.0),
                 "supplier_name": sup_name,
                 "supplier_name_norm": sup_norm,
                 "total_wins": total_wins,
+                "top_buyer": top_buyer,
+                "top_wins": top_wins,
                 "distinct_buyers": distinct_buyers,
                 "concentration_flag": concentration_flag,
                 "concentration_note": concentration_note,
                 "merged_variants": variants,
             }
+            all_suppliers.append(sup_item)
+
+        if all_suppliers:
+            # Prioritize highest concentration risk (top_wins descending, total_wins descending)
+            all_suppliers.sort(key=lambda x: (x.get("top_wins", 0), x.get("total_wins", 0)), reverse=True)
+            supplier_summary = all_suppliers[0]
+        else:
+            supplier_summary = {}
 
         log_entry = {
             "ts": ts,
@@ -368,11 +382,12 @@ def supplier_check_node(state: ThamaniState) -> dict[str, Any]:
         }
         run_log.append(log_entry)
         logger.info(
-            f"[SUPPLIER] Verified supplier '{supplier_summary.get('supplier_name_norm')}': "
+            f"[SUPPLIER] Verified primary supplier '{supplier_summary.get('supplier_name_norm')}': "
             f"{supplier_summary.get('total_wins')} wins across {supplier_summary.get('distinct_buyers')} buyers"
         )
         return {
             "supplier_summary": supplier_summary,
+            "all_suppliers": all_suppliers,
             "findings": findings,
             "run_log": run_log,
         }
@@ -418,32 +433,41 @@ def draft_node(state: ThamaniState) -> dict[str, Any]:
     model = state.get("model")
     model_focus = None
     if model:
-        model_focus = select_review_focus(
-            model=model,
-            ocid=state["ocid"],
-            findings=findings,
-            benchmark=primary_bm,
-            supplier=sup_summary,
-        )
-        selected = next((f for f in findings if f.get("id") == model_focus["finding_id"]), None)
-        focus_lines = [
-            "## Model-assisted review focus",
-            f"- **Model**: `{model}`",
-            f"- **Area for officer review**: {model_focus['focus_area']}",
-        ]
-        if selected:
-            citations = ", ".join(f"`{source}`" for source in selected["sources"])
-            focus_lines.append(f"- **Finding to inspect first**: [{selected['id']}] {selected['text']}")
-            focus_lines.append(f"- **Sources**: {citations}")
-        draft_text = draft_text.replace(
-            "## Officer decision", "\n".join(focus_lines) + "\n\n## Officer decision", 1
-        )
-        run_log.append({
-            "ts": utc_now_iso(),
-            "node": "model",
-            "inputs_summary": {"provider": "nvidia", "model": model, "findings_count": len(findings)},
-            "outputs_summary": model_focus,
-        })
+        try:
+            model_focus = select_review_focus(
+                model=model,
+                ocid=state["ocid"],
+                findings=findings,
+                benchmark=primary_bm,
+                supplier=sup_summary,
+            )
+            selected = next((f for f in findings if f.get("id") == model_focus["finding_id"]), None)
+            focus_lines = [
+                "## Model-assisted review focus",
+                f"- **Model**: `{model}`",
+                f"- **Area for officer review**: {model_focus['focus_area']}",
+            ]
+            if selected:
+                citations = ", ".join(f"`{source}`" for source in selected["sources"])
+                focus_lines.append(f"- **Finding to inspect first**: [{selected['id']}] {selected['text']}")
+                focus_lines.append(f"- **Sources**: {citations}")
+            draft_text = draft_text.replace(
+                "## Officer decision", "\n".join(focus_lines) + "\n\n## Officer decision", 1
+            )
+            run_log.append({
+                "ts": utc_now_iso(),
+                "node": "model",
+                "inputs_summary": {"provider": "nvidia", "model": model, "findings_count": len(findings)},
+                "outputs_summary": model_focus,
+            })
+        except Exception as exc:
+            logger.warning(f"[DRAFT] Model focus call encountered error: {exc}. Proceeding with deterministic analysis.")
+            run_log.append({
+                "ts": utc_now_iso(),
+                "node": "model",
+                "inputs_summary": {"provider": "nvidia", "model": model, "error": str(exc)},
+                "outputs_summary": {"fallback": "deterministic", "error": str(exc)},
+            })
     run_log.append({
         "ts": ts,
         "node": "draft",
@@ -617,9 +641,30 @@ def finalize_node(state: ThamaniState) -> dict[str, Any]:
     gate_note = gate.get("note", "N/A")
     override_id = gate.get("finding_id")
 
+    # Replace awaiting placeholder with formal determination in sealed draft
+    decision_lines = [
+        "## Officer decision",
+        f"- **Formal Determination**: `{decision_type.upper()}`",
+        f"- **Designated Officer**: {officer}",
+        f"- **Officer Determination Note**: {gate_note}",
+    ]
+    if override_id:
+        decision_lines.append(f"- **Override Target Finding**: `{override_id}`")
+    decision_lines.append(f"- **Decision Timestamp**: `{gate.get('ts', ts)}`")
+
+    sealed_draft = draft.replace(
+        "## Officer decision\n*[Awaiting review by the designated procurement officer via CLI gate. Decision must be explicitly recorded before finalization.]*",
+        "\n".join(decision_lines),
+    )
+    if sealed_draft == draft:
+        sealed_draft = draft.replace(
+            "*[Awaiting review by the designated procurement officer via CLI gate. Decision must be explicitly recorded before finalization.]*",
+            "\n".join(decision_lines[1:]),
+        )
+
     # Attach official Gate Verification Record with Cryptographic Seal
     gate_record_str, seal_hash = generate_gate_record_with_seal(
-        content_to_seal=draft,
+        content_to_seal=sealed_draft,
         officer_name=officer,
         decision_type=decision_type,
         timestamp=gate.get("ts", ts),
@@ -627,7 +672,7 @@ def finalize_node(state: ThamaniState) -> dict[str, Any]:
         note=gate_note,
     )
 
-    final_content = draft + "\n" + gate_record_str
+    final_content = sealed_draft + "\n" + gate_record_str
 
     # Use borrowed filesystem MCP client to write report to disk
     fs_client = FilesystemMCPClient("reports")

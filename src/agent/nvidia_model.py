@@ -68,7 +68,7 @@ def select_review_focus(
         NVIDIA_CHAT_URL,
         headers={"Authorization": f"Bearer {_api_key()}", "Content-Type": "application/json"},
         json=payload,
-        timeout=45.0,
+        timeout=25.0,
     )
     response.raise_for_status()
     content = response.json()["choices"][0]["message"]["content"].strip()

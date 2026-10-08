@@ -147,13 +147,16 @@ def generate_ai_executive_reasoning(
     verdict: str,
     stats: dict[str, Any],
     supplier_summary: dict[str, Any],
+    all_suppliers: list[dict[str, Any]] | None = None,
 ) -> str:
     """Produces the AI agent reasoning synthesis."""
     median = float(stats.get("median", 0))
     p99 = float(stats.get("p99", 0))
     sup_name = supplier_summary.get("supplier_name", "Supplier")
-    wins = supplier_summary.get("total_wins", 0)
-    buyers = supplier_summary.get("distinct_buyers", 0)
+    wins = int(supplier_summary.get("total_wins", 0))
+    top_wins = int(supplier_summary.get("top_wins", wins))
+    top_buyer = supplier_summary.get("top_buyer", "a single procuring entity")
+    buyers = int(supplier_summary.get("distinct_buyers", 0))
     conc_flag = supplier_summary.get("concentration_flag", False)
 
     narrative = []
@@ -178,14 +181,29 @@ def generate_ai_executive_reasoning(
         )
 
     if conc_flag:
+        pct = (top_wins / wins * 100) if wins > 0 else 0
+        if pct >= 99.9:
+            share_desc = f"100% (all {wins}) of its recorded awards"
+        elif pct > 50:
+            share_desc = f"a majority ({pct:.0f}% — {top_wins} of {wins}) of its recorded awards"
+        else:
+            share_desc = f"{pct:.0f}% ({top_wins} of {wins}) of its recorded awards"
+
         narrative.append(
             f"**High Governance Concern**: Entity `{sup_name}` exhibits severe single-buyer dependence. "
-            f"Holding majority of {wins} total wins from a single procuring entity warrants verification against competitive bidding thresholds."
+            f"Holding {share_desc} from '{top_buyer}' warrants verification against competitive bidding thresholds."
         )
     else:
         narrative.append(
             f"**Supplier Profile**: Entity `{sup_name}` has a diversified footprint ({wins} wins distributed across {buyers} procuring entities)."
         )
+
+    if all_suppliers and len(all_suppliers) > 1:
+        flagged_count = sum(1 for s in all_suppliers if s.get("concentration_flag"))
+        if flagged_count > 1:
+            narrative.append(
+                f"**Multi-Lot Cluster Alert**: Tender comprises {len(all_suppliers)} separate awards, with {flagged_count} distinct suppliers exhibiting single-buyer captive concentration."
+            )
 
     return " ".join(narrative)
 
@@ -198,7 +216,7 @@ with st.sidebar:
 
     st.markdown("#### **Tender Selection**")
     demo_presets = {
-        "AMARK Agency (188-Win Monopoly Case)": "ocds-5whusi-PCKTTI-2695",
+        "PC Kinyanjui Multi-Award Cluster (AMARK 200-Win Monopoly)": "ocds-5whusi-PCKTTI-2695",
         "African Touch Safaris (Alias Merging & Median)": "ocds-5whusi-1033",
         "Air Ticket Procurement (Services Benchmark)": "ocds-5whusi-1038",
         "PBSS Tender (Data Quality / Missing Buyer)": "ocds-5whusi-275077-PBSS/2025/2026/001",
@@ -249,22 +267,32 @@ with tab_analysis:
 
     if run_analysis or ("current_state" in st.session_state and st.session_state.get("active_ocid") == active_ocid):
         if run_analysis:
-            with st.spinner("Executing 6-stage LangGraph pipeline..."):
-                state = run_pipeline(
-                    ocid=active_ocid,
-                    officer=officer_name,
-                    model=os.getenv("THAMANI_MODEL") or None,
-                    auto_gate_action=None,  # Preview in UI; officer clicks sign below
-                    interactive=False,
-                )
-                st.session_state["current_state"] = state
-                st.session_state["active_ocid"] = active_ocid
+            try:
+                with st.spinner("Executing 6-stage LangGraph pipeline..."):
+                    state = run_pipeline(
+                        ocid=active_ocid,
+                        officer=officer_name,
+                        model=os.getenv("THAMANI_MODEL") or None,
+                        auto_gate_action=None,  # Preview in UI; officer clicks sign below
+                        interactive=False,
+                    )
+                    st.session_state["current_state"] = state
+                    st.session_state["active_ocid"] = active_ocid
+                    if "final_state" in st.session_state and st.session_state.get("final_state", {}).get("ocid") != active_ocid:
+                        del st.session_state["final_state"]
+                    if state.get("error"):
+                        st.error(f"Audit pipeline alert: {state['error']}")
+            except Exception as exc:
+                st.error(f"Audit execution encountered an error: {exc}")
+                logger.exception(f"Failed to execute audit pipeline on {active_ocid}")
+                st.stop()
 
         state = st.session_state.get("current_state", {})
         tender = state.get("tender", {})
         awards = state.get("awards", [])
         benchmarks = state.get("benchmarks", [])
         supplier_summary = state.get("supplier_summary", {})
+        all_suppliers = state.get("all_suppliers", [])
         findings = state.get("findings", [])
         draft = state.get("draft", "")
 
@@ -274,23 +302,29 @@ with tab_analysis:
             category = (tender.get("category") or "works").upper()
             st.metric("Category", category)
         with m_col2:
-            award_val = awards[0].get("value_amount", 0) if awards else 0
-            st.metric("Award Value", f"KES {award_val:,.0f}")
+            total_val = sum(a.get("value_amount", 0.0) for a in awards) if awards else 0.0
+            if len(awards) > 1:
+                st.metric("Total Tender Value", f"KES {total_val:,.0f}", delta=f"{len(awards)} Awards")
+            else:
+                award_val = awards[0].get("value_amount", 0.0) if awards else 0.0
+                st.metric("Award Value", f"KES {award_val:,.0f}")
         with m_col3:
             verdict = benchmarks[0].get("verdict", "ok") if benchmarks else "ok"
             st.metric("Price Verdict", verdict.upper())
         with m_col4:
-            conc_flag = supplier_summary.get("concentration_flag", False)
+            conc_flag = any(s.get("concentration_flag") for s in all_suppliers) if all_suppliers else supplier_summary.get("concentration_flag", False)
             st.metric("Supplier Concentration", "ALERT (High Risk)" if conc_flag else "Normal")
 
         # AI Agent Executive Reasoning Synthesis Box
         bm_stats = benchmarks[0].get("stats", {}) if benchmarks else {}
+        primary_val = awards[0].get("value_amount", 0.0) if awards else 0.0
         ai_reasoning = generate_ai_executive_reasoning(
             category=category,
-            award_val=award_val,
+            award_val=primary_val,
             verdict=verdict,
             stats=bm_stats,
             supplier_summary=supplier_summary,
+            all_suppliers=all_suppliers,
         )
         st.markdown(
             f"""
@@ -316,7 +350,7 @@ with tab_analysis:
                 stats = bm.get("stats", {})
                 fig_price = build_price_distribution_figure(
                     category=tender.get("category") or "works",
-                    award_value=award_val,
+                    award_value=primary_val,
                     stats=stats,
                     verdict=bm.get("verdict", "ok"),
                     nearest_awards=bm.get("nearest_awards", []),
@@ -334,6 +368,8 @@ with tab_analysis:
                     buyer_counts=buyer_counts,
                 )
                 st.plotly_chart(fig_sup, use_container_width=True)
+                if all_suppliers and len(all_suppliers) > 1:
+                    st.caption(f"Showing primary captive supplier: **{supplier_summary.get('supplier_name')}** ({supplier_summary.get('top_wins')} wins from single buyer). Tender contains {len(all_suppliers)} awards total.")
             else:
                 st.info("No supplier history available.")
 
@@ -366,13 +402,17 @@ with tab_analysis:
             st.success("No pricing outliers or supplier concentration flags detected for this tender.")
 
         # Human-in-the-Loop Gate Section
-        st.markdown('<div class="gate-card">', unsafe_allow_html=True)
-        st.markdown("### 🛑 **Human-in-the-Loop Statutory Gate**")
         st.markdown(
-            "<p style='color:#cbd5e1; font-size:14px; margin-bottom:16px;'>"
-            "Under statutory public procurement oversight rules, AI prepares the empirical evidence but <strong>never</strong> awards or disqualifies. "
-            "A designated human officer must explicitly review and sign off before output can be archived."
-            "</p>",
+            """
+            <div style="background-color: #1e293b; border: 2px solid #eab308; border-radius: 8px; padding: 20px 24px; margin: 24px 0 16px 0;">
+                <div style="font-size: 18px; font-weight: 800; color: #f8fafc; margin-bottom: 6px;">
+                    🛑 Statutory Human-in-the-Loop Gate
+                </div>
+                <div style="color: #cbd5e1; font-size: 13.5px; line-height: 1.5;">
+                    Under statutory public procurement oversight rules, AI prepares the empirical evidence but <strong>never</strong> awards or disqualifies. A designated human officer must explicitly review and sign off before output can be archived.
+                </div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
@@ -407,8 +447,6 @@ with tab_analysis:
                 else:
                     st.info("Briefing rejected; no final report was archived.")
 
-        st.markdown("</div>", unsafe_allow_html=True)
-
         # Final Report Output
         if "final_state" in st.session_state:
             f_state = st.session_state["final_state"]
@@ -431,7 +469,7 @@ with tab_analysis:
                         use_container_width=True,
                     )
                 with d_col2:
-                    dossier_html = generate_dossier_html(content, ocid=active_ocid)
+                    dossier_html = generate_dossier_html(content, ocid=active_ocid, is_sealed=True)
                     st.download_button(
                         label="📥 Download Official HTML Dossier (.html)",
                         data=dossier_html,
@@ -448,16 +486,34 @@ with tab_dossier:
     st.markdown('<div class="main-header">Official Executive Audit Dossier</div>', unsafe_allow_html=True)
     st.caption("Standardized public oversight docket with Republic of Kenya insignia and print-ready formatting.")
 
-    active_report = Path(f"reports/thamani_briefing_{active_ocid}.md")
-    if active_report.exists():
-        content = active_report.read_text(encoding="utf-8")
-        dossier_html = generate_dossier_html(content, ocid=active_ocid)
+    active_in_session = st.session_state.get("active_ocid")
+    has_final = "final_state" in st.session_state and active_in_session == active_ocid
+    has_current = "current_state" in st.session_state and active_in_session == active_ocid
+
+    if has_final:
+        f_state = st.session_state["final_state"]
+        rep_path = f_state.get("final_report_path")
+        if rep_path and Path(rep_path).exists():
+            final_md = Path(rep_path).read_text(encoding="utf-8")
+            st.success("✅ **OFFICIALLY SEALED AUDIT DOSSIER** — Reviewed by officer and permanently secured with SHA-256 seal.")
+            dossier_html = generate_dossier_html(final_md, ocid=active_ocid, is_sealed=True)
+            if hasattr(st, "html"):
+                st.html(dossier_html)
+            else:
+                st.components.v1.html(dossier_html, height=900, scrolling=True)
+        else:
+            st.info("Briefing rejected or not finalized. No official dossier archived.")
+    elif has_current:
+        c_state = st.session_state["current_state"]
+        draft_md = c_state.get("draft", "")
+        st.warning("⚠️ **PRE-GATE AUDIT DRAFT (UNSEALED)** — This draft is awaiting formal officer verification in Tab 1 before cryptographic sealing.")
+        dossier_html = generate_dossier_html(draft_md, ocid=active_ocid, is_sealed=False)
         if hasattr(st, "html"):
             st.html(dossier_html)
         else:
-            st.components.v1.html(dossier_html, height=750, scrolling=True)
+            st.components.v1.html(dossier_html, height=900, scrolling=True)
     else:
-        st.info("Run and finalize an analysis in Tab 1 to generate and preview the executive dossier.")
+        st.info(f"No active audit record for `{active_ocid}`. Please go to the **'Tender Analysis & Gate'** tab and click **'🚀 Run Agentic Audit'** to generate the dossier.")
 
 
 # -----------------------------------------------------------------------------
