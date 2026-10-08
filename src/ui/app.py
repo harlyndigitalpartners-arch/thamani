@@ -15,6 +15,15 @@ from typing import Any
 
 import streamlit as st
 
+# Propagate Streamlit Cloud secrets to os.environ for agent and backend modules
+try:
+    if hasattr(st, "secrets"):
+        for _k in ("NVIDIA_API_KEY", "THAMANI_MODEL", "THAMANI_DB"):
+            if _k in st.secrets and _k not in os.environ:
+                os.environ[_k] = str(st.secrets[_k]).strip()
+except Exception:
+    pass
+
 from src.agent.crypto_seal import verify_report_integrity
 from src.agent.loop import finalize_reviewed_state, run_pipeline
 from src.export.dossier import generate_dossier_html
