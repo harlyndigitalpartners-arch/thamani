@@ -205,7 +205,15 @@ def generate_ai_executive_reasoning(
                 f"**Multi-Lot Cluster Alert**: Tender comprises {len(all_suppliers)} separate awards, with {flagged_count} distinct suppliers exhibiting single-buyer captive concentration."
             )
 
-    return " ".join(narrative)
+    # Deduplicate any duplicate sentences
+    seen = set()
+    clean_narrative = []
+    for part in narrative:
+        if part not in seen:
+            seen.add(part)
+            clean_narrative.append(part)
+
+    return " ".join(clean_narrative)
 
 
 # Sidebar Navigation & Settings
@@ -265,27 +273,33 @@ with tab_analysis:
     with col_btn:
         run_analysis = st.button("🚀 Run Agentic Audit", type="primary", use_container_width=True)
 
-    if run_analysis or ("current_state" in st.session_state and st.session_state.get("active_ocid") == active_ocid):
-        if run_analysis:
-            try:
-                with st.spinner("Executing 6-stage LangGraph pipeline..."):
-                    state = run_pipeline(
-                        ocid=active_ocid,
-                        officer=officer_name,
-                        model=os.getenv("THAMANI_MODEL") or None,
-                        auto_gate_action=None,  # Preview in UI; officer clicks sign below
-                        interactive=False,
-                    )
-                    st.session_state["current_state"] = state
-                    st.session_state["active_ocid"] = active_ocid
-                    if "final_state" in st.session_state and st.session_state.get("final_state", {}).get("ocid") != active_ocid:
-                        del st.session_state["final_state"]
-                    if state.get("error"):
-                        st.error(f"Audit pipeline alert: {state['error']}")
-            except Exception as exc:
-                st.error(f"Audit execution encountered an error: {exc}")
-                logger.exception(f"Failed to execute audit pipeline on {active_ocid}")
-                st.stop()
+    if run_analysis:
+        try:
+            with st.spinner("Executing 6-stage LangGraph pipeline..."):
+                state = run_pipeline(
+                    ocid=active_ocid,
+                    officer=officer_name,
+                    model=os.getenv("THAMANI_MODEL") or None,
+                    auto_gate_action=None,  # Preview in UI; officer clicks sign below
+                    interactive=False,
+                )
+                st.session_state["current_state"] = state
+                st.session_state["active_ocid"] = active_ocid
+                if "final_state" in st.session_state and st.session_state.get("final_state", {}).get("ocid") != active_ocid:
+                    del st.session_state["final_state"]
+                if state.get("error"):
+                    st.session_state["pipeline_error"] = state["error"]
+                else:
+                    st.session_state.pop("pipeline_error", None)
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Audit execution encountered an error: {exc}")
+            logger.exception(f"Failed to execute audit pipeline on {active_ocid}")
+            st.stop()
+
+    if "current_state" in st.session_state and st.session_state.get("active_ocid") == active_ocid:
+        if st.session_state.get("pipeline_error"):
+            st.error(f"Audit pipeline alert: {st.session_state['pipeline_error']}")
 
         state = st.session_state.get("current_state", {})
         tender = state.get("tender", {})
@@ -442,21 +456,21 @@ with tab_analysis:
             with st.spinner("Applying cryptographic seal and finalizing briefing..."):
                 final_state = finalize_reviewed_state(state, officer_name, cmd)
                 st.session_state["final_state"] = final_state
-                if final_state.get("final_report_path"):
-                    st.success("Briefing signed, sealed with SHA-256 hash, and archived.")
-                else:
-                    st.info("Briefing rejected; no final report was archived.")
+            st.rerun()
 
         # Final Report Output
-        if "final_state" in st.session_state:
+        if "final_state" in st.session_state and st.session_state.get("final_state", {}).get("ocid") == active_ocid:
             f_state = st.session_state["final_state"]
             report_path = f_state.get("final_report_path")
             seal_hash = f_state.get("seal_hash")
 
             if report_path and Path(report_path).exists():
+                st.success("✅ **Briefing signed, sealed with SHA-256 hash, and archived.**")
                 content = Path(report_path).read_text(encoding="utf-8")
                 st.markdown("#### **Final Sealed Briefing**")
                 st.code(content, language="markdown")
+            else:
+                st.info("Briefing rejected; no final report was archived.")
 
                 # Download Buttons
                 d_col1, d_col2 = st.columns(2)

@@ -26,15 +26,18 @@
 - **[DQ-VAL-2] [DATA-QUALITY] (Severity: MEDIUM)**: Award value data quality anomaly: non-positive award value. — *Sources: `ocds-5whusi-275077-PBSS/2025/2026/001`*
 
 ## Officer decision
-*[Awaiting review by the designated procurement officer via CLI gate. Decision must be explicitly recorded before finalization.]*
+- **Formal Determination**: `APPROVE`
+- **Designated Officer**: Procurement Officer
+- **Officer Determination Note**: Approved as drafted by reviewing officer.
+- **Decision Timestamp**: `2026-10-08T16:35:45.288290+00:00`
 
 
 ---
 ## Officer Gate Verification Record
 - **Reviewing Officer**: Procurement Officer
 - **Verification Decision**: `APPROVE`
-- **Timestamp**: `2026-10-08T12:52:31.506010+00:00`
+- **Timestamp**: `2026-10-08T16:35:45.288290+00:00`
 - **Officer Remarks**: Approved as drafted by reviewing officer.
-- **Cryptographic Tamper-Proof Seal (SHA-256)**: `a2a70c177fe90ce8e26dce6251919c5eaca590199310dba69c555af2f6f9db96`
+- **Cryptographic Tamper-Proof Seal (SHA-256)**: `bf66abcd84199ca8dc5addf42a582c126935de7530ddfd239891195974ecdaee`
 - **Audit Status**: VERIFIED & LOCKED FOR ARCHIVAL
 ---

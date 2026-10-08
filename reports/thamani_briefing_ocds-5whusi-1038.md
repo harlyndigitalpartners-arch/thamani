@@ -16,25 +16,28 @@
 - **Supplier Name**: AFRICAN TOUCH SAFARIS LIMITED (Normalized: `AFRICAN TOUCH SAFARIS`)
 - **Total Historical Wins**: 516
 - **Distinct Procuring Entities**: 54
-- **Concentration Flag**: Yes — Concentration detected: 120 historical wins from single procuring entity 'National Transport and Safety Authority' (120/516 of all recorded awards, 54 distinct buyer(s)).
+- **Concentration Flag**: Yes — Supplier 'AFRICAN TOUCH SAFARIS LIMITED' (Normalized: 'AFRICAN TOUCH SAFARIS'): Single-buyer captive concentration detected: 120 historical wins from procuring entity 'National Transport and Safety Authority' (120/516 of all recorded awards, 54 distinct buyer(s)).
 - **Merged Name Variants**: "AFRICAN TOUCH SAFARIS LIMITED", "AFRICAN TOUCH SAFARIS", "AFRICAN TOUCH SAFARIS LTD", "African Touch Safaris Limited", "African Touch Safaris", "African Touch Safaris Ltd", "African Touch safaris", "African touch Safaris", "African touch safaris", "African Touch safaris Limited"
 
 ## Data-quality notes
 - No data quality issues identified. Records conform to expected schema.
 
 ### Key Findings & Citations
-- **[SC-CONC-1] [CONCENTRATION] (Severity: HIGH)**: Concentration detected: 120 historical wins from single procuring entity 'National Transport and Safety Authority' (120/516 of all recorded awards, 54 distinct buyer(s)). — *Sources: `ocds-5whusi-NTSA/RFQ-026/2022-2023`, `ocds-5whusi-NTSA/RFQ-035/2022-2023`, `ocds-5whusi-NTSA/RFQ-045/2022-2023`, `ocds-5whusi-NTSA/RFQ-063/2022-2023`, `ocds-5whusi-NTSA/RFQ-247/2021-2022`*
+- **[SC-CONC-1] [CONCENTRATION] (Severity: HIGH)**: Supplier 'AFRICAN TOUCH SAFARIS LIMITED' (Normalized: 'AFRICAN TOUCH SAFARIS'): Single-buyer captive concentration detected: 120 historical wins from procuring entity 'National Transport and Safety Authority' (120/516 of all recorded awards, 54 distinct buyer(s)). — *Sources: `ocds-5whusi-NTSA/RFQ-026/2022-2023`, `ocds-5whusi-NTSA/RFQ-035/2022-2023`, `ocds-5whusi-NTSA/RFQ-045/2022-2023`, `ocds-5whusi-NTSA/RFQ-063/2022-2023`, `ocds-5whusi-NTSA/RFQ-247/2021-2022`*
 
 ## Officer decision
-*[Awaiting review by the designated procurement officer via CLI gate. Decision must be explicitly recorded before finalization.]*
+- **Formal Determination**: `APPROVE`
+- **Designated Officer**: Procurement Officer
+- **Officer Determination Note**: Approved as drafted by reviewing officer.
+- **Decision Timestamp**: `2026-10-08T16:35:44.444531+00:00`
 
 
 ---
 ## Officer Gate Verification Record
 - **Reviewing Officer**: Procurement Officer
 - **Verification Decision**: `APPROVE`
-- **Timestamp**: `2026-10-08T12:52:30.581102+00:00`
+- **Timestamp**: `2026-10-08T16:35:44.444531+00:00`
 - **Officer Remarks**: Approved as drafted by reviewing officer.
-- **Cryptographic Tamper-Proof Seal (SHA-256)**: `b7140a3aaf8c3513a28c556f9e72ebdc3b47dc5af7825667a596f1854a969555`
+- **Cryptographic Tamper-Proof Seal (SHA-256)**: `fc9dd3744392d32407f95a75ca0e0b44a105024115d1e1021507084e6e6b0dc1`
 - **Audit Status**: VERIFIED & LOCKED FOR ARCHIVAL
 ---

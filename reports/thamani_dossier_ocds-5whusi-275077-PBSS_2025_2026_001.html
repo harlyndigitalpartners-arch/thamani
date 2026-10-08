@@ -145,7 +145,7 @@
     margin-top: 40px;
     padding: 24px;
     background: #f8fafc;
-    border: 2px dashed #94a3b8;
+    border: 2px solid var(--ke-green);
     border-radius: 8px;
   }
   .cert-header {
@@ -157,6 +157,9 @@
     margin-bottom: 12px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .hash-box {
     font-family: monospace;
@@ -166,6 +169,7 @@
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     word-break: break-all;
+    overflow-wrap: anywhere;
     color: #334155;
   }
 
@@ -229,23 +233,28 @@
 <li><strong>[DQ-VAL-2] [DATA-QUALITY] (Severity: MEDIUM)</strong>: Award value data quality anomaly: non-positive award value. — <em>Sources: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-275077-PBSS/2025/2026/001</code></em></li>
 </ul>
 <h2>Officer decision</h2>
-<p><em>[Awaiting review by the designated procurement officer via CLI gate. Decision must be explicitly recorded before finalization.]</em></p>
+<ul style='line-height:1.6;'>
+<li><strong>Formal Determination</strong>: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>APPROVE</code></li>
+<li><strong>Designated Officer</strong>: Procurement Officer</li>
+<li><strong>Officer Determination Note</strong>: Approved as drafted by reviewing officer.</li>
+<li><strong>Decision Timestamp</strong>: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>2026-10-08T16:35:45.288290+00:00</code></li>
+</ul>
 
     <div class="cert-box">
       <div class="cert-header">
         <span>Official Verification & Cryptographic Certificate</span>
-        <span>STATUS: VERIFIED &amp; ARCHIVED</span>
+        <span style="color: var(--ke-green); font-weight: 800;">STATUS: VERIFIED &amp; ARCHIVED</span>
       </div>
-      <p style="margin: 0 0 8px 0; font-size: 13px;">
-        This audit briefing was processed through the Thamani LangGraph governance engine and verified by a designated oversight officer under strict human-in-the-loop statutory controls.
+      <p style="margin: 0 0 10px 0; font-size: 13px; line-height: 1.5;">
+        This audit briefing was formally processed through the Thamani LangGraph governance engine and verified by a designated oversight officer under strict human-in-the-loop statutory controls.
       </p>
-      <div style="font-size: 12px; margin-bottom: 6px;">
+      <div style="font-size: 12px; margin-bottom: 6px; line-height: 1.6; word-break: break-word;">
         <strong>Reviewing Officer:</strong> Procurement Officer &nbsp;|&nbsp; 
         <strong>Action:</strong> APPROVE &nbsp;|&nbsp; 
-        <strong>Timestamp:</strong> 2026-10-08T12:52:31.506010+00:00
+        <strong>Timestamp:</strong> 2026-10-08T16:35:45.288290+00:00
       </div>
       <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-top: 10px; margin-bottom: 4px;">SHA-256 Tamper-Proof Cryptographic Signature:</div>
-      <div class="hash-box">a2a70c177fe90ce8e26dce6251919c5eaca590199310dba69c555af2f6f9db96</div>
+      <div class="hash-box">bf66abcd84199ca8dc5addf42a582c126935de7530ddfd239891195974ecdaee</div>
     </div>
   </div>
 </div>

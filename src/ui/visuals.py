@@ -110,6 +110,7 @@ def build_price_distribution_figure(
             title_font=dict(color="#cbd5e1"),
             tickfont=dict(color="#94a3b8"),
             type="log",
+            dtick=1,
             gridcolor="#334155",
         ),
         yaxis=dict(

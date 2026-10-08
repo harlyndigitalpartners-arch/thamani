@@ -145,7 +145,7 @@
     margin-top: 40px;
     padding: 24px;
     background: #f8fafc;
-    border: 2px dashed #94a3b8;
+    border: 2px solid var(--ke-green);
     border-radius: 8px;
   }
   .cert-header {
@@ -157,6 +157,9 @@
     margin-bottom: 12px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .hash-box {
     font-family: monospace;
@@ -166,6 +169,7 @@
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     word-break: break-all;
+    overflow-wrap: anywhere;
     color: #334155;
   }
 
@@ -217,7 +221,7 @@
 <li><strong>Supplier Name</strong>: AFRICAN TOUCH SAFARIS LIMITED (Normalized: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>AFRICAN TOUCH SAFARIS</code>)</li>
 <li><strong>Total Historical Wins</strong>: 516</li>
 <li><strong>Distinct Procuring Entities</strong>: 54</li>
-<li><strong>Concentration Flag</strong>: Yes — Concentration detected: 120 historical wins from single procuring entity 'National Transport and Safety Authority' (120/516 of all recorded awards, 54 distinct buyer(s)).</li>
+<li><strong>Concentration Flag</strong>: Yes — Supplier 'AFRICAN TOUCH SAFARIS LIMITED' (Normalized: 'AFRICAN TOUCH SAFARIS'): Single-buyer captive concentration detected: 120 historical wins from procuring entity 'National Transport and Safety Authority' (120/516 of all recorded awards, 54 distinct buyer(s)).</li>
 <li><strong>Merged Name Variants</strong>: "AFRICAN TOUCH SAFARIS LIMITED", "AFRICAN TOUCH SAFARIS", "AFRICAN TOUCH SAFARIS LTD", "African Touch Safaris Limited", "African Touch Safaris", "African Touch Safaris Ltd", "African Touch safaris", "African touch Safaris", "African touch safaris", "African Touch safaris Limited"</li>
 </ul>
 <h2>Data-quality notes</h2>
@@ -226,26 +230,32 @@
 </ul>
 <h3 style='font-size:15px; margin-top:16px;'>Key Findings &amp; Citations</h3>
 <ul style='line-height:1.6;'>
-<div class='finding-box'><strong>[SC-CONC-1] [CONCENTRATION] (Severity: HIGH)</strong>: Concentration detected: 120 historical wins from single procuring entity 'National Transport and Safety Authority' (120/516 of all recorded awards, 54 distinct buyer(s)). — <em>Sources: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-026/2022-2023</code>, <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-035/2022-2023</code>, <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-045/2022-2023</code>, <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-063/2022-2023</code>, <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-247/2021-2022</code></em></div>
+<div class='finding-box'><strong>[SC-CONC-1] [CONCENTRATION] (Severity: HIGH)</strong>: Supplier 'AFRICAN TOUCH SAFARIS LIMITED' (Normalized: 'AFRICAN TOUCH SAFARIS'): Single-buyer captive concentration detected: 120 historical wins from procuring entity 'National Transport and Safety Authority' (120/516 of all recorded awards, 54 distinct buyer(s)). — <em>Sources: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-026/2022-2023</code>, <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-035/2022-2023</code>, <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-045/2022-2023</code>, <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-063/2022-2023</code>, <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>ocds-5whusi-NTSA/RFQ-247/2021-2022</code></em></div>
 </ul>
 <h2>Officer decision</h2>
-<p><em>[Awaiting review by the designated procurement officer via CLI gate. Decision must be explicitly recorded before finalization.]</em></p>
+<ul style='line-height:1.6;'>
+<li><strong>Formal Determination</strong>: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>OVERRIDE</code></li>
+<li><strong>Designated Officer</strong>: Chief Procurement Officer Jane Doe</li>
+<li><strong>Officer Determination Note</strong>: Specialized engineering mandate approved by county executive.</li>
+<li><strong>Override Target Finding</strong>: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>finding-1</code></li>
+<li><strong>Decision Timestamp</strong>: <code style='background:#f1f5f9; padding:2px 4px; border-radius:3px; font-size:12px; font-family:monospace;'>2026-10-08T16:35:57.034395+00:00</code></li>
+</ul>
 
     <div class="cert-box">
       <div class="cert-header">
         <span>Official Verification & Cryptographic Certificate</span>
-        <span>STATUS: VERIFIED &amp; ARCHIVED</span>
+        <span style="color: var(--ke-green); font-weight: 800;">STATUS: VERIFIED &amp; ARCHIVED</span>
       </div>
-      <p style="margin: 0 0 8px 0; font-size: 13px;">
-        This audit briefing was processed through the Thamani LangGraph governance engine and verified by a designated oversight officer under strict human-in-the-loop statutory controls.
+      <p style="margin: 0 0 10px 0; font-size: 13px; line-height: 1.5;">
+        This audit briefing was formally processed through the Thamani LangGraph governance engine and verified by a designated oversight officer under strict human-in-the-loop statutory controls.
       </p>
-      <div style="font-size: 12px; margin-bottom: 6px;">
+      <div style="font-size: 12px; margin-bottom: 6px; line-height: 1.6; word-break: break-word;">
         <strong>Reviewing Officer:</strong> Chief Procurement Officer Jane Doe &nbsp;|&nbsp; 
         <strong>Action:</strong> OVERRIDE &nbsp;|&nbsp; 
-        <strong>Timestamp:</strong> 2026-10-08T12:52:40.725226+00:00
+        <strong>Timestamp:</strong> 2026-10-08T16:35:57.034395+00:00
       </div>
       <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-top: 10px; margin-bottom: 4px;">SHA-256 Tamper-Proof Cryptographic Signature:</div>
-      <div class="hash-box">609f57d1e179ae0fa1e5fe5c838c3c975f4d5c48b4e9f1088579847786427bed</div>
+      <div class="hash-box">2e43ea4ce2e61d76b600319ac9ef32c1b07a1336ed23f4d6ceaec65dc1aa5088</div>
     </div>
   </div>
 </div>

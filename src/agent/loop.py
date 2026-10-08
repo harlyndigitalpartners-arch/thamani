@@ -341,7 +341,8 @@ def supplier_check_node(state: ThamaniState) -> dict[str, Any]:
             if top_wins >= 8:
                 concentration_flag = True
                 concentration_note = (
-                    f"Concentration detected: {top_wins} historical wins from single procuring entity '{top_buyer}' "
+                    f"Supplier '{sup_name}' (Normalized: '{sup_norm}'): Single-buyer captive concentration detected: "
+                    f"{top_wins} historical wins from procuring entity '{top_buyer}' "
                     f"({top_wins}/{total_wins} of all recorded awards, {distinct_buyers} distinct buyer(s))."
                 )
                 findings.append({
