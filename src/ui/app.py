@@ -8,12 +8,14 @@ supplier concentration graphs, human gate sign-off, and cryptographic verificati
 from __future__ import annotations
 
 import io
+import html
 import json
 import os
 from pathlib import Path
 from typing import Any
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Propagate Streamlit Cloud secrets to os.environ for agent and backend modules
 try:
@@ -128,8 +130,9 @@ def load_supplier_buyer_breakdown(supplier_norm: str) -> list[dict[str, Any]]:
         cursor.execute(
             """
             SELECT buyer_name, count(*) as wins
-            FROM awards
-            WHERE supplier_name_norm = ?
+            FROM (SELECT DISTINCT ocid, award_id, buyer_name FROM awards
+                  WHERE supplier_name_norm = ?)
+            WHERE TRIM(COALESCE(buyer_name, '')) != ''
             GROUP BY buyer_name
             ORDER BY wins DESC
             LIMIT 10
@@ -150,12 +153,13 @@ def generate_ai_executive_reasoning(
     all_suppliers: list[dict[str, Any]] | None = None,
 ) -> str:
     """Produces the AI agent reasoning synthesis."""
+    stats = stats or {}
     median = float(stats.get("median", 0))
     p99 = float(stats.get("p99", 0))
-    sup_name = supplier_summary.get("supplier_name", "Supplier")
+    sup_name = html.escape(str(supplier_summary.get("supplier_name", "Supplier")))
     wins = int(supplier_summary.get("total_wins", 0))
     top_wins = int(supplier_summary.get("top_wins", wins))
-    top_buyer = supplier_summary.get("top_buyer", "a single procuring entity")
+    top_buyer = html.escape(str(supplier_summary.get("top_buyer", "a single procuring entity")))
     buyers = int(supplier_summary.get("distinct_buyers", 0))
     conc_flag = supplier_summary.get("concentration_flag", False)
 
@@ -173,7 +177,7 @@ def generate_ai_executive_reasoning(
     elif verdict == "flag":
         narrative.append(
             f"**Outlier Escalation**: Award of KES {award_val:,.0f} breaches statistical risk bounds "
-            f"(3× median: KES {3*median:,.0f}, P99: KES {p99:,.0f}). Strong indication of abnormal price markup."
+            f"(3× median: KES {3*median:,.0f}, P99: KES {p99:,.0f}). Review scope and quantities; this signal does not establish overpricing."
         )
     else:
         narrative.append(
@@ -190,7 +194,7 @@ def generate_ai_executive_reasoning(
             share_desc = f"{pct:.0f}% ({top_wins} of {wins}) of its recorded awards"
 
         narrative.append(
-            f"**High Governance Concern**: Entity `{sup_name}` exhibits severe single-buyer dependence. "
+            f"**Supplier Review Signal**: Entity `{sup_name}` has repeated awards from the same buyer. "
             f"Holding {share_desc} from '{top_buyer}' warrants verification against competitive bidding thresholds."
         )
     else:
@@ -224,7 +228,7 @@ with st.sidebar:
 
     st.markdown("#### **Tender Selection**")
     demo_presets = {
-        "PC Kinyanjui Multi-Award Cluster (AMARK 200-Win Monopoly)": "ocds-5whusi-PCKTTI-2695",
+        "PC Kinyanjui Multi-Award Cluster (AMARK Repeated-Buyer Review)": "ocds-5whusi-PCKTTI-2695",
         "African Touch Safaris (Alias Merging & Median)": "ocds-5whusi-1033",
         "Air Ticket Procurement (Services Benchmark)": "ocds-5whusi-1038",
         "PBSS Tender (Data Quality / Missing Buyer)": "ocds-5whusi-275077-PBSS/2025/2026/001",
@@ -239,7 +243,7 @@ with st.sidebar:
         st.code(active_ocid, language="text")
 
     st.markdown("#### **Reviewing Officer**")
-    officer_name = st.text_input("Designated Officer Name", value="Procurement Oversight Officer")
+    officer_name = st.text_input("Designated Officer Name", value="", placeholder="Enter the reviewing officer's name")
 
     st.divider()
     st.markdown("#### **AI Model & Agent Architecture**")
@@ -285,8 +289,7 @@ with tab_analysis:
                 )
                 st.session_state["current_state"] = state
                 st.session_state["active_ocid"] = active_ocid
-                if "final_state" in st.session_state and st.session_state.get("final_state", {}).get("ocid") != active_ocid:
-                    del st.session_state["final_state"]
+                st.session_state.pop("final_state", None)
                 if state.get("error"):
                     st.session_state["pipeline_error"] = state["error"]
                 else:
@@ -310,13 +313,29 @@ with tab_analysis:
         findings = state.get("findings", [])
         draft = state.get("draft", "")
 
+        with st.expander("Execution trace: analysis tools and report write", expanded=True):
+            tool_names = {"fetch": "ocds_fetch (local tool)",
+                          "benchmark": "price_benchmark (local tool)",
+                          "supplier_check": "Supplier history query",
+                          "draft": "briefing_draft (local tool)",
+                          "gate": "Officer review",
+                          "finalize": "filesystem.write_file (MCP, only after approval)"}
+            st.dataframe([
+                {"Time (UTC)": entry.get("ts", ""),
+                 "Step": entry.get("node", ""),
+                 "Tool / action": tool_names.get(entry.get("node"), entry.get("node", "")),
+                 "Result": json.dumps(entry.get("outputs_summary", {}), ensure_ascii=False)}
+                for entry in state.get("run_log", [])
+            ], hide_index=True, use_container_width=True)
+
         # Summary Metrics Row
         m_col1, m_col2, m_col3, m_col4 = st.columns(4)
         with m_col1:
             category = (tender.get("category") or "works").upper()
             st.metric("Category", category)
         with m_col2:
-            total_val = sum(a.get("value_amount", 0.0) for a in awards) if awards else 0.0
+            unique_awards = {(a.get("ocid", state.get("ocid")), a.get("award_id")): a for a in awards}
+            total_val = sum(a.get("value_amount", 0.0) for a in unique_awards.values())
             if len(awards) > 1:
                 st.metric("Total Tender Value", f"KES {total_val:,.0f}", delta=f"{len(awards)} Awards")
             else:
@@ -359,7 +378,7 @@ with tab_analysis:
         # Visual Analytics Charts
         c_col1, c_col2 = st.columns(2)
         with c_col1:
-            if benchmarks and awards:
+            if benchmarks and awards and benchmarks[0].get("stats") and primary_val > 0:
                 bm = benchmarks[0]
                 stats = bm.get("stats", {})
                 fig_price = build_price_distribution_figure(
@@ -371,7 +390,8 @@ with tab_analysis:
                 )
                 st.plotly_chart(fig_price, use_container_width=True)
             else:
-                st.info("No price benchmark available.")
+                st.info("No comparable price distribution is available for this record.")
+            st.caption("Category totals are screening signals. Scope, quantities, year and inflation are not controlled; a flag is not proof of overpricing.")
 
         with c_col2:
             if supplier_summary:
@@ -397,13 +417,13 @@ with tab_analysis:
                 title_class = "finding-title-high" if sev == "HIGH" else "finding-title-med"
                 border_color = "#ef4444" if sev == "HIGH" else "#f59e0b"
 
-                citations_html = "".join([f'<span class="source-pill">{s}</span>' for s in sources])
+                citations_html = "".join([f'<span class="source-pill">{html.escape(str(s))}</span>' for s in sources])
 
                 st.markdown(
                     f"""
                     <div class="finding-card" style="border-left: 6px solid {border_color} !important;">
-                        <div class="{title_class}">[{f.get('id')}] {kind} (Severity: {sev})</div>
-                        <div class="finding-text">{f.get('text')}</div>
+                        <div class="{title_class}">[{html.escape(str(f.get('id')))}] {html.escape(kind)} (Severity: {html.escape(sev)})</div>
+                        <div class="finding-text">{html.escape(str(f.get('text')))}</div>
                         <div>
                             <span style="font-size:12px; font-weight:700; color:#94a3b8; margin-right:8px;">Sources Cited:</span>
                             {citations_html}
@@ -420,10 +440,10 @@ with tab_analysis:
             """
             <div style="background-color: #1e293b; border: 2px solid #eab308; border-radius: 8px; padding: 20px 24px; margin: 24px 0 16px 0;">
                 <div style="font-size: 18px; font-weight: 800; color: #f8fafc; margin-bottom: 6px;">
-                    🛑 Statutory Human-in-the-Loop Gate
+                    🛑 Human Review Gate
                 </div>
                 <div style="color: #cbd5e1; font-size: 13.5px; line-height: 1.5;">
-                    Under statutory public procurement oversight rules, AI prepares the empirical evidence but <strong>never</strong> awards or disqualifies. A designated human officer must explicitly review and sign off before output can be archived.
+                    Thamani prepares the empirical evidence but <strong>never</strong> awards or disqualifies. A designated human officer must explicitly review and sign off before output can be archived.
                 </div>
             </div>
             """,
@@ -441,12 +461,24 @@ with tab_analysis:
         if gate_action == "Override Finding with Note":
             col_ov1, col_ov2 = st.columns([1, 2])
             with col_ov1:
-                finding_ids = [f.get("id") for f in findings] or ["finding-1"]
+                finding_ids = [f.get("id") for f in findings]
                 override_finding_id = st.selectbox("Target Finding ID", finding_ids)
             with col_ov2:
-                override_note = st.text_input("Officer Justification / Explanation", value="Justified under special engineering mandate.")
+                override_note = st.text_input("Officer Justification / Explanation", value="")
 
-        if st.button("✍️ Formally Sign & Finalize Briefing", type="primary"):
+        can_review = bool(officer_name.strip() and draft and not state.get("error")
+                          and state.get("gate_decision", {}).get("decision") == "pending")
+        if gate_action == "Override Finding with Note":
+            can_review = can_review and bool(override_finding_id and override_note.strip())
+        if not officer_name.strip():
+            st.warning("To enable signing, enter your name in Designated Officer Name on the left, then press Enter.")
+        elif state.get("error") or not draft:
+            st.warning("There is no valid briefing to sign. Click Run Agentic Audit to generate a new briefing.")
+        elif state.get("gate_decision", {}).get("decision") != "pending":
+            st.info("This briefing has already been reviewed. Click Run Agentic Audit to start a new review.")
+        elif gate_action == "Override Finding with Note" and not (override_finding_id and override_note.strip()):
+            st.warning("Choose an existing finding and enter your explanation to enable signing.")
+        if st.button("✍️ Formally Sign & Finalize Briefing", type="primary", disabled=not can_review):
             cmd = "approve"
             if gate_action == "Override Finding with Note":
                 cmd = f"override {override_finding_id} {override_note}"
@@ -454,8 +486,13 @@ with tab_analysis:
                 cmd = "reject"
 
             with st.spinner("Applying cryptographic seal and finalizing briefing..."):
-                final_state = finalize_reviewed_state(state, officer_name, cmd)
+                try:
+                    final_state = finalize_reviewed_state(state, officer_name, cmd)
+                except (ValueError, RuntimeError, OSError) as exc:
+                    st.error(f"Briefing could not be finalized: {exc}")
+                    st.stop()
                 st.session_state["final_state"] = final_state
+                st.session_state["current_state"] = final_state
             st.rerun()
 
         # Final Report Output
@@ -465,13 +502,13 @@ with tab_analysis:
             seal_hash = f_state.get("seal_hash")
 
             if report_path and Path(report_path).exists():
-                st.success("✅ **Briefing signed, sealed with SHA-256 hash, and archived.**")
                 content = Path(report_path).read_text(encoding="utf-8")
+                if not verify_report_integrity(content).get("verified"):
+                    st.error("Archived report checksum is invalid. Use the verification tab to inspect it.")
+                    st.stop()
+                st.success("✅ **Briefing reviewed, checksummed, and archived.**")
                 st.markdown("#### **Final Sealed Briefing**")
                 st.code(content, language="markdown")
-            else:
-                st.info("Briefing rejected; no final report was archived.")
-
                 # Download Buttons
                 d_col1, d_col2 = st.columns(2)
                 with d_col1:
@@ -491,6 +528,8 @@ with tab_analysis:
                         mime="text/html",
                         use_container_width=True,
                     )
+            else:
+                st.info("Briefing rejected; no final report was archived.")
 
 
 # -----------------------------------------------------------------------------
@@ -509,12 +548,9 @@ with tab_dossier:
         rep_path = f_state.get("final_report_path")
         if rep_path and Path(rep_path).exists():
             final_md = Path(rep_path).read_text(encoding="utf-8")
-            st.success("✅ **OFFICIALLY SEALED AUDIT DOSSIER** — Reviewed by officer and permanently secured with SHA-256 seal.")
+            st.success("✅ **OFFICIALLY SEALED AUDIT DOSSIER** — Reviewed by officer and checked against the stored SHA-256 checksum.")
             dossier_html = generate_dossier_html(final_md, ocid=active_ocid, is_sealed=True)
-            if hasattr(st, "html"):
-                st.html(dossier_html)
-            else:
-                st.components.v1.html(dossier_html, height=900, scrolling=True)
+            components.html(dossier_html, height=1000, scrolling=True)
         else:
             st.info("Briefing rejected or not finalized. No official dossier archived.")
     elif has_current:
@@ -522,10 +558,7 @@ with tab_dossier:
         draft_md = c_state.get("draft", "")
         st.warning("⚠️ **PRE-GATE AUDIT DRAFT (UNSEALED)** — This draft is awaiting formal officer verification in Tab 1 before cryptographic sealing.")
         dossier_html = generate_dossier_html(draft_md, ocid=active_ocid, is_sealed=False)
-        if hasattr(st, "html"):
-            st.html(dossier_html)
-        else:
-            st.components.v1.html(dossier_html, height=900, scrolling=True)
+        components.html(dossier_html, height=1000, scrolling=True)
     else:
         st.info(f"No active audit record for `{active_ocid}`. Please go to the **'Tender Analysis & Gate'** tab and click **'🚀 Run Agentic Audit'** to generate the dossier.")
 
@@ -535,7 +568,7 @@ with tab_dossier:
 # -----------------------------------------------------------------------------
 with tab_crypto:
     st.markdown('<div class="main-header">Cryptographic Seal Verification Engine</div>', unsafe_allow_html=True)
-    st.caption("Mathematically verifies that no party altered an archived audit file after the officer signed off.")
+    st.caption("Checks the report against its stored SHA-256 checksum. This detects changes; it does not authenticate officer identity or protect against replacing both the report and checksum.")
 
     test_file = st.file_uploader("Upload Briefing Markdown File (.md)", type=["md", "txt"])
     input_text = st.text_area("Or Paste Briefing Content Here", height=200)
@@ -550,6 +583,8 @@ with tab_crypto:
         res = verify_report_integrity(target_content)
         if res.get("verified"):
             st.success("✅ **CRYPTOGRAPHIC SEAL VERIFIED VALID**")
+            if not res.get("metadata_protected"):
+                st.warning("Legacy checksum: verification notes and override metadata are not protected.")
             st.json(res)
         else:
             st.error("❌ **TAMPER ALERT / SEAL INVALID**")
@@ -576,4 +611,4 @@ with tab_evals:
     ]
 
     st.table(eval_data)
-    st.info("All 9 evaluation tasks are tested continuously via `pytest` and `python -m tests.test_evals`.")
+    st.info("Run pytest for regression tests and python -m src.agent.loop --eval for the separate evaluation harness. Live NVIDIA evaluation requires configured credentials.")

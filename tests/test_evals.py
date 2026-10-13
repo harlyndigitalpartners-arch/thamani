@@ -19,7 +19,7 @@ import os
 import sqlite3
 from typing import Any
 
-from src.agent.loop import run_pipeline
+from src.agent.loop import finalize_reviewed_state, run_pipeline
 from src.thamani_server.server import ocds_fetch, price_benchmark
 
 logger = logging.getLogger("thamani.evals")
@@ -94,9 +94,12 @@ def eval_task_7() -> bool:
     state = run_pipeline(
         ocid="ocds-5whusi-1033",
         officer=officer_name,
-        auto_gate_action=f"override finding-1 {override_note}",
         interactive=False,
     )
+    findings = state.get("findings", [])
+    if not findings:
+        return False
+    state = finalize_reviewed_state(state, officer_name, f"override {findings[0]['id']} {override_note}")
     gate = state.get("gate_decision", {})
     if gate.get("decision") != "override":
         return False

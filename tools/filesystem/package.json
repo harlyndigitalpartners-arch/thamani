@@ -1,0 +1,8 @@
+{
+  "name": "thamani-filesystem-mcp",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "1.0.0"
+  }
+}

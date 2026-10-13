@@ -18,7 +18,7 @@ All tasks are executed **3× each** to verify deterministic convergence under th
 | **8** | NVIDIA Nemotron call → computed draft → pending human gate | PASS | PASS | PASS | **PASS** | PASS | ✅ Verified 2026-10-08 |
 | **9** | Synthetic mixed-currency case → EXPECTED FAIL | FAIL | FAIL | FAIL | **FAIL** | FAIL | ⚠️ Expected Fail |
 
-**Total Result**: 9 / 9 tasks behaved exactly according to specification.
+**Total Result**: 8 passing evaluation tasks and 1 documented expected failure. The expected failure remains unresolved.
 
 ---
 
@@ -37,7 +37,7 @@ All tasks are executed **3× each** to verify deterministic convergence under th
 
 ### Task 3: Supplier Concentration (AMARK Northern Agency)
 - **Input**: Tender OCID `ocds-5whusi-PCKTTI-2695`
-- **Database Reality**: AMARK Northern Agency has 200 recorded wins across 9 years, **all from a single procuring entity** (`PC KINYANJUI TECHNICAL TRAINING INSTITUTE`).
+- **Database Reality**: Duplicate-aware analysis counts 195 distinct recorded awards across 9 years, all from `PC KINYANJUI TECHNICAL TRAINING INSTITUTE`. The earlier 200 figure counted duplicated stored rows.
 - **Behavior**: Generates `concentration` finding with `HIGH` severity. Citations explicitly reference past award OCIDs.
 
 ### Task 4: Broken Supplier-ID Scheme
@@ -78,3 +78,18 @@ In Kenyan public procurement (PPRA/PPIP), 99.9% of historical award records are 
 2. **Historical Central Bank of Kenya (CBK) FX Join**: Ingest official daily CBK exchange rates into a local SQLite table (`fx_rates(date, currency, rate_to_kes)`).
 3. **Point-in-Time Purchasing Power Normalization**: Convert contract value using the rate published on the contract's specific `award_date`.
 4. **Low-Confidence Manual-Review Flag**: When FX conversions are applied, flag the resulting benchmark with a low-confidence badge requiring mandatory officer review.
+
+
+## Reliability regression verification ? 2026-10-13
+
+`python -m pytest -q`: **33 passed** (96.94 seconds).
+
+Checks cover re-ingestion and legacy duplicate migration, database changes and separation, joint-supplier award counting, KES filtering, non-finite values, complete verification-record checksums, HTML escaping, officer and override validation, report version preservation, logs surviving failed writes, interactive demo gates, the three real-data pipelines stopping at pending review, Streamlit approve/reject flows, and a real stdio round trip to the community filesystem MCP server.
+
+The snapshot contains 109,237 distinct award identities within 113,246 stored rows. Duplicate-aware analysis gives AMARK 195 distinct awards; earlier 200-win summaries counted stored rows. Category benchmarks remain screening comparisons without scope, quantity, year or inflation controls. Version 2 checksums are integrity checks, not authenticated signatures or immutable archives.
+
+Live NVIDIA calls were not repeated in this verification. The historical Task 8 results above remain historical evidence, and current model tests use mocked responses. FX conversion remains outside scope.
+
+## Submission verification — 2026-10-14
+
+`python -m pytest -q`: **35 passed** (47.73 seconds). The installed community filesystem MCP server was exercised through a real stdio round trip. Live NVIDIA calls were not repeated; the historical live model results above remain separate evidence.

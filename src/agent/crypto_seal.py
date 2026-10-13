@@ -1,8 +1,9 @@
-"""Thamani Cryptographic Audit Seal & Tamper-Proof Verification Module.
+"""Thamani report integrity checksum and verification.
 
 Enforces governance integrity by computing SHA-256 cryptographic fingerprints
 for finalized value-for-money briefings. Any modification to an archived report
-invalidates the cryptographic signature.
+invalidates the checksum. This is not an identity signature: a party able to
+replace both the report and checksum can recompute it.
 """
 
 from __future__ import annotations
@@ -32,12 +33,11 @@ def generate_gate_record_with_seal(
     Returns:
         tuple[str, str]: (gate_record_markdown, sha256_hash)
     """
-    seal_hash = compute_seal_hash(content_to_seal, officer_name, timestamp, decision_type)
-
     lines = [
         "",
         "---",
         "## Officer Gate Verification Record",
+        "- **Seal Version**: `2`",
         f"- **Reviewing Officer**: {officer_name}",
         f"- **Verification Decision**: `{decision_type.upper()}`",
         f"- **Timestamp**: `{timestamp}`",
@@ -49,11 +49,11 @@ def generate_gate_record_with_seal(
     else:
         lines.append(f"- **Officer Remarks**: {note or 'Approved as drafted by reviewing officer.'}")
 
-    lines.extend([
-        f"- **Cryptographic Tamper-Proof Seal (SHA-256)**: `{seal_hash}`",
-        "- **Audit Status**: VERIFIED & LOCKED FOR ARCHIVAL",
-        "---",
-    ])
+    lines.extend(["- **Audit Status**: VERIFIED CHECKSUM; RETAIN ORIGINAL FOR ARCHIVAL", "---"])
+    # Cover the complete record, including remarks, override ID and trailing text.
+    unsigned_report = content_to_seal.strip() + "\n" + "\n".join(lines).strip()
+    seal_hash = compute_seal_hash(unsigned_report, officer_name, timestamp, decision_type)
+    lines.insert(-2, f"- **Report Integrity Checksum (SHA-256)**: `{seal_hash}`")
 
     return "\n".join(lines), seal_hash
 
@@ -74,10 +74,11 @@ def verify_report_integrity(report_path_or_content: str | Path) -> dict[str, Any
     # Extract Gate Verification section
     seal_match = re.search(
         r"## Officer Gate Verification Record\s*\n"
+        r"(?:- \*\*Seal Version\*\*:\s*`2`\s*\n)?"
         r"- \*\*Reviewing Officer\*\*:\s*(?P<officer>[^\n]+)\s*\n"
         r"- \*\*Verification Decision\*\*:\s*`(?P<decision>[^\n`]+)`\s*\n"
         r"- \*\*Timestamp\*\*:\s*`(?P<ts>[^\n`]+)`.*?"
-        r"- \*\*Cryptographic Tamper-Proof Seal \(SHA-256\)\*\*:\s*`(?P<hash>[a-f0-9]{64})`",
+        r"- \*\*(?:Report Integrity Checksum|Cryptographic Tamper-Proof Seal) \(SHA-256\)\*\*:\s*`(?P<hash>[a-f0-9]{64})`",
         raw_text,
         re.DOTALL,
     )
@@ -93,12 +94,27 @@ def verify_report_integrity(report_path_or_content: str | Path) -> dict[str, Any
     ts = seal_match.group("ts").strip()
     recorded_hash = seal_match.group("hash").strip()
 
-    # Pre-seal content is everything up to the gate record separator
-    pre_seal_split = raw_text.split("## Officer Gate Verification Record")[0]
-    # Strip any trailing horizontal rule or whitespace
-    pre_seal_content = re.sub(r"\n---\s*$", "", pre_seal_split).strip()
-
-    expected_hash = compute_seal_hash(pre_seal_content, officer, ts, decision)
+    version = 2 if "- **Seal Version**: `2`" in seal_match.group(0) else 1
+    if version == 2:
+        # Exactly one verification record and checksum must exist.
+        if raw_text.count("## Officer Gate Verification Record") != 1:
+            return {"verified": False, "error": "Multiple verification records found."}
+        unsigned, count = re.subn(
+            r"^- \*\*Report Integrity Checksum \(SHA-256\)\*\*: `([a-f0-9]{64})`\r?\n",
+            "", raw_text, flags=re.MULTILINE,
+        )
+        if count != 1:
+            return {"verified": False, "error": "Expected one report checksum."}
+        # Generation joins the stripped draft and stripped record with one newline.
+        unsigned = unsigned.replace("\r\n", "\n")
+        prefix, suffix = unsigned.split("## Officer Gate Verification Record", 1)
+        prefix = re.sub(r"\n---\s*$", "", prefix).strip()
+        canonical = prefix + "\n---\n## Officer Gate Verification Record" + suffix
+        expected_hash = compute_seal_hash(canonical.strip(), officer, ts, decision)
+    else:
+        pre_seal_split = raw_text.split("## Officer Gate Verification Record")[0]
+        pre_seal_content = re.sub(r"\n---\s*$", "", pre_seal_split).strip()
+        expected_hash = compute_seal_hash(pre_seal_content, officer, ts, decision)
     is_valid = (expected_hash == recorded_hash)
 
     return {
@@ -108,4 +124,6 @@ def verify_report_integrity(report_path_or_content: str | Path) -> dict[str, Any
         "officer": officer,
         "decision": decision,
         "timestamp": ts,
+        "seal_version": version,
+        "metadata_protected": version == 2,
     }

@@ -21,7 +21,7 @@ This script provides the exact timing, spoken narration, screen actions, and key
 ### Beat 1: Launch & Problem Statement (0:00 – 0:20)
 - **Screen Action**: Terminal window open at `thamani/`. Type and execute:
   ```bash
-  python -m src.agent.loop --demo
+  python -m src.agent.loop --demo --officer "Jane Doe, CPO"
   ```
 - **Spoken Narration**:
   > *"Every year, billions in public procurement are awarded without instant empirical benchmarks or supplier history checks. We built **Thamani**—an agentic AI value-for-money oversight analyst for Kenyan public tenders. It autonomously audits awards against 9 years of real procurement disclosures, but enforces a strict non-negotiable rule: **the AI prepares the evidence; a human officer must make the decision**."*
@@ -43,14 +43,14 @@ This script provides the exact timing, spoken narration, screen actions, and key
 - **Screen Action**: Highlight **Case 1 (AMARK)** on screen, then **Case 2 (African Touch Safaris)**.
 - **Spoken Narration**:
   > *"Here are two real governance detections running live:*
-  > - *First: **AMARK Northern Agency**. Thamani detects that this contractor won **200 out of 200 recorded tenders from a single government institute**, immediately flagging high concentration and conflict-of-interest risk with full citation links.*
+  > - *First: **AMARK Northern Agency**. Thamani detects that this contractor won **195 distinct recorded awards from a single government institute**, immediately flagging a repeated-buyer review signal with full citation links.*
   > - *Second: **African Touch Safaris**. Government entries spell the company ten different ways—with 'Ltd', 'Limited', or varied capitalization. Our entity resolution unifies all 516 awards under one clean identity."*
 
 ---
 
 ### Beat 4: Human-in-the-Loop Statutory Gate (2:00 – 2:30)
 - **Screen Action**: Point to the Human Gate prompt on screen showing:
-  `[Automated Gate Action]: override SC-CONC-1 Supplier verified under specialized technical mandate...`
+  `Enter decision (Jane Doe, CPO) [approve | override <id> <note> | reject]:`
   and the Case 3 Zero-Value award flagged as `DATA-QUALITY`.
 - **Spoken Narration**:
   > *"Here is our core governance constraint in action: **the human gate**. The AI halts and will never finalize an output without an officer's sign-off. The officer can approve, reject, or formally override a finding with a justification.*
@@ -63,9 +63,9 @@ This script provides the exact timing, spoken narration, screen actions, and key
 - **Highlight**:
   1. The 5 nearest cited OCID benchmark records.
   2. The Officer Gate Verification Record.
-  3. The **SHA-256 Cryptographic Tamper-Proof Seal**.
+  3. The **SHA-256 Report Integrity Checksum**.
 - **Spoken Narration**:
-  > *"The output is permanently locked: every finding carries empirical OCID citations, the reviewing officer's identity and timestamp are affixed, and an SHA-256 cryptographic seal guarantees tamper-proof integrity for parliamentary oversight.*
+  > *"Each reviewed output is archived under a unique version: every finding carries empirical OCID citations, the reviewing officer's identity and timestamp are affixed, and a SHA-256 checksum covers the report and complete verification record. It detects changed content but does not authenticate officer identity.*
   > *Thamani turns open data into actionable financial integrity. Thank you."*
 
 ---
@@ -76,3 +76,5 @@ Judges can also inspect the full visual dashboard anytime:
 streamlit run src/ui/app.py
 ```
 This launches the full graphical auditor workspace with interactive Plotly price distribution curves, supplier monopoly graphs, live gate buttons, and the 9-task evaluation inspector.
+
+Use the report paths printed by the current run; older fixed filenames are legacy examples. For an override, copy an actual finding ID from the displayed draft and enter your own justification. Each of the three cases waits at its gate.

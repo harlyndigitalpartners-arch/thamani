@@ -1,5 +1,7 @@
 # Data artifacts
 data/thamani.sqlite
+data/thamani.sqlite-wal
+data/thamani.sqlite-shm
 data/*.jsonl.gz
 data/*.jsonl
 runs/*.jsonl
@@ -17,6 +19,10 @@ env/
 # Environment variables
 .env
 .env.local
+node_modules/
+
+# Local video production and private form preparation
+submission/
 
 # IDE
 .idea/

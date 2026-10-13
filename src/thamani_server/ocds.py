@@ -89,6 +89,18 @@ def init_db(db_path: str | Path) -> sqlite3.Connection:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_awards_buyer_id ON awards(buyer_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tenders_category ON tenders(category)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_awards_value ON awards(value_amount)")
+        # Repeated releases update the same award/supplier, rather than adding wins.
+        # Migrate existing caches by keeping the latest row for each identity.
+        conn.execute("""
+            DELETE FROM awards WHERE id NOT IN (
+                SELECT MAX(id) FROM awards
+                GROUP BY ocid, award_id, supplier_name_norm
+            )
+        """)
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_awards_identity
+            ON awards(ocid, award_id, supplier_name_norm)
+        """)
 
     return conn
 
@@ -139,7 +151,7 @@ def ingest_file(file_path: Path, conn: sqlite3.Connection, batch_size: int = 500
             tenders_batch = []
         if awards_batch:
             conn.executemany("""
-                INSERT INTO awards (
+                INSERT OR REPLACE INTO awards (
                     ocid, award_id, award_date, value_amount, value_currency,
                     supplier_id, supplier_name, supplier_name_norm, buyer_id, buyer_name
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

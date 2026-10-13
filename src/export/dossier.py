@@ -31,6 +31,7 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
     --slate-100: #f1f5f9;
     --border-color: #cbd5e1;
   }}
+  html {{ color-scheme: light; }}
   * {{ box-sizing: border-box; }}
   body {{
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -41,6 +42,7 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
     background: #f8fafc;
   }}
   .dossier-card {{
+    color: #1e293b;
     max-width: 900px;
     margin: 0 auto;
     background: #ffffff;
@@ -98,6 +100,11 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
     cursor: pointer;
   }}
   .print-btn:hover {{ background: #004d00; }}
+  .print-help {{ color: #475569; font-size: 12px; margin: 8px 0 0; }}
+  .content p, .content li, .content strong, .content em, .finding-box {{
+    color: #1e293b;
+  }}
+  .content code {{ color: #334155; overflow-wrap: anywhere; }}
   
   .content {{
     padding: 32px 40px;
@@ -193,7 +200,7 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
   @media print {{
     body {{ background: #ffffff; padding: 0; }}
     .dossier-card {{ box-shadow: none; border: none; max-width: 100%; }}
-    .print-btn {{ display: none; }}
+    .print-btn, .print-help {{ display: none; }}
     h2 {{ page-break-after: avoid; }}
     .cert-box {{ page-break-inside: avoid; }}
   }}
@@ -212,7 +219,8 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
         <span class="ocid-badge">OCID: {ocid}</span>
       </div>
       <div>
-        <button class="print-btn" onclick="window.print()">🖨️ Print / Save PDF</button>
+        <button class="print-btn" type="button" onclick="window.print()">🖨️ Print / Save PDF</button>
+        <p class="print-help">Or open this downloaded HTML in Chrome and press Ctrl+P.</p>
       </div>
     </div>
   </div>
@@ -222,7 +230,7 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
 
     <div class="cert-box">
       <div class="cert-header">
-        <span>Official Verification & Cryptographic Certificate</span>
+        <span>Officer Review & Report Integrity Checksum</span>
         <span style="color: {status_color}; font-weight: 800;">STATUS: {gate_status}</span>
       </div>
       <p style="margin: 0 0 10px 0; font-size: 13px; line-height: 1.5;">
@@ -233,7 +241,7 @@ DOSSIER_TEMPLATE = """<!DOCTYPE html>
         <strong>Action:</strong> {gate_decision} &nbsp;|&nbsp; 
         <strong>Timestamp:</strong> {gate_ts}
       </div>
-      <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-top: 10px; margin-bottom: 4px;">SHA-256 Tamper-Proof Cryptographic Signature:</div>
+      <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-top: 10px; margin-bottom: 4px;">SHA-256 Report Integrity Checksum:</div>
       <div class="hash-box">{seal_hash}</div>
     </div>
   </div>
@@ -310,7 +318,7 @@ def markdown_to_html_simple(md_text: str) -> str:
 def format_inline_markdown(text: str) -> str:
     """Format bold, italic, code tags in text."""
     # Bold
-    t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html.escape(text))
     # Italic
     t = re.sub(r"\*(.+?)\*", r"<em>\1</em>", t)
     # Code / OCIDs
@@ -331,7 +339,7 @@ def generate_dossier_html(
 
     # Verify integrity and extract seal information
     integrity = verify_report_integrity(markdown_content)
-    actually_sealed = is_sealed if is_sealed is not None else integrity.get("verified", False)
+    actually_sealed = integrity.get("verified", False) and is_sealed is not False
 
     if actually_sealed:
         seal_hash = integrity.get("recorded_hash") or "VALID_SEAL_HASH"
@@ -342,7 +350,7 @@ def generate_dossier_html(
         status_color = "var(--ke-green)"
         cert_description = (
             "This audit briefing was formally processed through the Thamani LangGraph governance engine "
-            "and verified by a designated oversight officer under strict human-in-the-loop statutory controls."
+            "and verified by a designated oversight officer under the project's human review controls. The checksum does not authenticate officer identity or prevent replacement of both report and checksum."
         )
         cert_border = "2px solid var(--ke-green)"
     else:
@@ -353,8 +361,8 @@ def generate_dossier_html(
         gate_status = "DRAFT / UNSEALED"
         status_color = "#d97706"
         cert_description = (
-            "⚠️ <strong>STATUTORY RESPONSIBLE AI CONTROL</strong>: This briefing is an automated analysis draft. "
-            "Under Republic of Kenya public procurement oversight rules, the AI agent never decides alone. "
+            "⚠️ <strong>HUMAN REVIEW CONTROL</strong>: This briefing is an automated analysis draft. "
+            "Thamani requires an explicit officer decision before finalization. "
             "The cryptographic seal and official certification are generated <strong>ONLY</strong> when a designated human officer signs off."
         )
         cert_border = "2px dashed #d97706"
@@ -377,7 +385,7 @@ def generate_dossier_html(
 
 def export_dossier_to_file(markdown_content: str, output_path: str | Path, ocid: str | None = None) -> Path:
     """Writes compiled HTML dossier to specified file path."""
-    html_content = generate_dossier_html(markdown_content, ocid=ocid, is_sealed=True)
+    html_content = generate_dossier_html(markdown_content, ocid=ocid)
     target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(html_content, encoding="utf-8")

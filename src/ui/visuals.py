@@ -30,7 +30,8 @@ def build_price_distribution_figure(
     # Empirical baseline box representation
     fig.add_trace(
         go.Box(
-            x=[p25, median, p75],
+            q1=[p25], median=[median], q3=[p75],
+            lowerfence=[p25], upperfence=[p75],
             name=f"9-Yr {category.capitalize()} Baseline",
             boxpoints=False,
             orientation="h",

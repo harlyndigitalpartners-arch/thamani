@@ -9,6 +9,7 @@ Exposes the 3 core analysis tools:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 import sqlite3
@@ -86,8 +87,10 @@ def ocds_fetch(ocid: str, db_path: str | None = None) -> dict[str, Any]:
                    supplier_id, supplier_name, supplier_name_norm, buyer_id, buyer_name
             FROM awards
             WHERE ocid = ?
+              AND id IN (SELECT MAX(id) FROM awards WHERE ocid = ?
+                         GROUP BY ocid, award_id, supplier_name_norm)
             """,
-            (ocid,),
+            (ocid, ocid),
         )
         a_rows = cursor.fetchall()
 
@@ -145,8 +148,8 @@ def ocds_fetch(ocid: str, db_path: str | None = None) -> dict[str, Any]:
                 "ocid": ocid,
                 "tender_id": "",
                 "title": f"Procurement Record {ocid}",
-                "procurement_method": "open",
-                "category": "goods",
+                "procurement_method": "",
+                "category": "",
                 "buyer_id": first_aw.get("buyer_id", ""),
                 "buyer_name": first_aw.get("buyer_name", ""),
                 "record_date": first_aw.get("award_date", ""),
@@ -180,30 +183,24 @@ def _percentile(data: list[float], p: float) -> float:
     return float(d0 + d1)
 
 
-# In-memory category values cache for fast repeated benchmark evaluations
-_CATEGORY_CACHE: dict[str, list[float]] = {}
-
-
 def _get_category_values(conn: sqlite3.Connection, category: str) -> list[float]:
-    """Retrieve or cache sorted values for category."""
+    """Read the current database snapshot; count joint awards only once."""
     cat = category.strip().lower()
-    if cat in _CATEGORY_CACHE:
-        return _CATEGORY_CACHE[cat]
 
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT a.value_amount
+        SELECT DISTINCT a.ocid, a.award_id, a.value_amount
         FROM awards a
         JOIN tenders t ON a.ocid = t.ocid
         WHERE t.category = ? COLLATE NOCASE AND a.value_amount > 0
+          AND a.value_currency = 'KES' COLLATE NOCASE
         ORDER BY a.value_amount ASC
         """,
         (cat,),
     )
     rows = cursor.fetchall()
-    values = [float(r[0]) for r in rows]
-    _CATEGORY_CACHE[cat] = values
+    values = [float(r[2]) for r in rows if math.isfinite(float(r[2]))]
     return values
 
 
@@ -223,13 +220,13 @@ def price_benchmark(
     curr = (currency or "KES").strip().upper()
 
     # Rule: non-positive value
-    if value_amount is None or value_amount <= 0:
+    if value_amount is None or not math.isfinite(value_amount) or value_amount <= 0:
         return {
             "category": cat,
             "value_amount": value_amount,
             "currency": curr,
             "verdict": "data-quality",
-            "note": "non-positive award value",
+            "note": "missing, non-finite, or non-positive award value",
             "stats": None,
             "nearest_ocids": [],
             "evidence_ocids": [],
@@ -273,17 +270,20 @@ def price_benchmark(
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT a.ocid, a.value_amount
+            SELECT DISTINCT a.ocid, a.award_id, a.value_amount, a.value_currency,
+                            t.title, a.award_date
             FROM awards a
             JOIN tenders t ON a.ocid = t.ocid
             WHERE t.category = ? COLLATE NOCASE AND a.value_amount > 0
-            ORDER BY ABS(a.value_amount - ?) ASC
+              AND a.value_currency = 'KES' COLLATE NOCASE
+            ORDER BY ABS(a.value_amount - ?) ASC, a.ocid, a.award_id
             LIMIT 5
             """,
             (cat, value_amount),
         )
         nearest_rows = cursor.fetchall()
-        nearest_ocids = [r["ocid"] for r in nearest_rows]
+        nearest_awards = [dict(r) for r in nearest_rows if math.isfinite(r["value_amount"])]
+        nearest_ocids = list(dict.fromkeys(r["ocid"] for r in nearest_awards))
 
         # Rule: Absurd value (>1000x median norm) gets data-quality flag (Task 6 in EVALS.md)
         if value_amount > 1000.0 * median:
@@ -313,6 +313,8 @@ def price_benchmark(
                 "p99": p99,
             },
             "nearest_ocids": nearest_ocids,
+            "nearest_awards": nearest_awards,
+            "limitations": "Category totals are screening signals. Scope, quantity, year and inflation are not controlled; an outlier is not proof of overpricing.",
             "evidence_ocids": nearest_ocids,
         }
     finally:
@@ -344,6 +346,9 @@ def validate_findings(findings: list[dict[str, Any]]) -> list[str]:
     valid_severities = {"high", "medium", "low"}
 
     for idx, f in enumerate(findings):
+        if not isinstance(f, dict):
+            errors.append(f"Finding {idx + 1}: must be a dictionary.")
+            continue
         f_id = f.get("id") or f"finding-{idx+1}"
         kind = f.get("kind")
         severity = f.get("severity")
@@ -357,8 +362,8 @@ def validate_findings(findings: list[dict[str, Any]]) -> list[str]:
             errors.append(f"Finding '{f_id}': missing source citations (sources must be a non-empty list of OCIDs).")
         else:
             for s in sources:
-                if not s or not str(s).strip():
-                    errors.append(f"Finding '{f_id}': contains an empty source citation.")
+                if not isinstance(s, str) or not s.strip().startswith("ocds-"):
+                    errors.append(f"Finding '{f_id}': contains an invalid OCID citation.")
 
         if kind not in valid_kinds:
             errors.append(f"Finding '{f_id}': invalid kind '{kind}'. Must be one of {sorted(valid_kinds)}.")
@@ -447,6 +452,8 @@ def briefing_draft(
         evidence = price_analysis.get("nearest_ocids") or price_analysis.get("evidence_ocids") or []
         if evidence:
             md_lines.append(f"- **Nearest Benchmark Citations**: {', '.join(f'`{e}`' for e in evidence)}")
+        if price_analysis.get("limitations"):
+            md_lines.append(f"- **Interpretation Limitations**: {price_analysis['limitations']}")
     else:
         md_lines.append("No price benchmark computed.")
     md_lines.append("")

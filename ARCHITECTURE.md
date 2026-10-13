@@ -17,13 +17,15 @@ graph TD
 
 ---
 
+![Thamani component and data-flow diagram](docs/thamani-architecture.png)
+
 ## Core Components
 
 ### 1. Data Layer (`src/thamani_server/ocds.py`)
 - **Source**: Open Contracting Data Standard (OCDS) releases published by Kenya Public Procurement Regulatory Authority (PPRA) via Open Contracting Partnership (OCP) Registry (Publication 147).
 - **Storage**: Embedded SQLite database (`data/thamani.sqlite`) with WAL mode and compound indexes.
 - **Normalization**: `norm_name()` strips corporate suffixes (`LTD`, `LIMITED`, `CO`, `PLC`) and punctuation to ensure alias variants (e.g. `AFRICAN TOUCH SAFARIS` vs `AFRICAN TOUCH SAFARIS LIMITED`) resolve to a single legal entity identity.
-- **Scale**: 260,744 tenders, 113,246 awards spanning 2018–2026.
+- **Scale**: 260,744 tenders and 109,237 distinct awards spanning 2018–2026. The legacy snapshot has 113,246 stored rows; analysis excludes duplicate award identities.
 
 ### 2. FastMCP Tool Server (`src/thamani_server/server.py`)
 Provides three analysis tools accessible via the Model Context Protocol:
@@ -40,5 +42,11 @@ Provides three analysis tools accessible via the Model Context Protocol:
 - **Framework**: LangGraph (open-source DAG orchestrator).
 - **State Machine**: Strongly typed `ThamaniState` holding records, benchmarks, findings, and immutable run logs.
 - **Human-in-the-Loop Gate**: CLI interface halting execution until the named procurement officer enters `approve`, `override <finding-id> <note>`, or `reject`.
-- **Audit Logging**: Every state transition appends execution telemetry to `runs/<utc-timestamp>.jsonl`.
+- **Audit Logging**: Completed node events are appended as the graph streams updates to a unique `runs/<utc-timestamp>_<uuid>.jsonl`. Officer decisions are persisted before report writes.
 - **Model Review Focus**: When `--model` is supplied, NVIDIA Nemotron selects a review area and an existing finding ID. The selection is validated against computed findings before the original finding and its OCID sources appear in the draft. Model calls are recorded in the run log.
+
+## Report and data integrity
+
+The agent calls the three analysis tool functions locally; they are also exposed by the FastMCP server. Final Markdown persistence uses a real stdio client connection to the community filesystem MCP server, restricted to the report directory. Install its pinned package with `npm ci --prefix tools/filesystem`. Reports have unique version filenames and logs persist completed events incrementally.
+
+Cache ingestion upserts award/supplier identities and migrates duplicate rows. Analysis queries count distinct awards, including joint-supplier awards only once for benchmarking. Benchmark values are read from the current database and filtered to KES. Category comparisons do not control for scope, quantity or year. Version 2 checksums cover report and verification metadata; they do not authenticate the officer or provide immutable storage.

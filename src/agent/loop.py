@@ -13,17 +13,22 @@ Orchestrates the 6-step value-for-money analysis workflow:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import datetime
 import json
 import logging
 import os
 import re
+import shutil
 import sqlite3
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Literal, TypedDict
 
 from langgraph.graph import END, StateGraph
+from fastmcp import Client
+from fastmcp.client.transports import StdioTransport
 
 from src.agent.crypto_seal import generate_gate_record_with_seal
 from src.agent.nvidia_model import DEFAULT_NVIDIA_MODEL, select_review_focus
@@ -55,14 +60,32 @@ class FilesystemMCPClient:
     """
 
     def __init__(self, root_dir: str | Path = "reports") -> None:
-        self.root_dir = Path(root_dir)
+        self.root_dir = Path(root_dir).resolve()
         self.root_dir.mkdir(parents=True, exist_ok=True)
 
     def write_file(self, filename: str, content: str) -> Path:
         """Write file to destination folder."""
         safe_name = re.sub(r"[^\w\-.]", "_", filename)
+        if safe_name in {"", ".", ".."}:
+            raise ValueError("A report filename is required")
         target = self.root_dir / safe_name
-        target.write_text(content, encoding="utf-8")
+        if target.exists():
+            raise FileExistsError(f"Refusing to overwrite archived report: {target}")
+        node = shutil.which("node")
+        server_js = Path(os.getenv("THAMANI_FILESYSTEM_SERVER_JS", str(
+            Path(__file__).resolve().parents[2] / "tools/filesystem/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js"
+        )))
+        if not node or not server_js.is_file():
+            raise RuntimeError("Filesystem MCP server is unavailable. Install Node.js and run npm ci --prefix tools/filesystem.")
+
+        async def write_via_mcp():
+            transport = StdioTransport(command=node, args=[str(server_js.resolve()), str(self.root_dir)], keep_alive=False)
+            async with Client(transport) as client:
+                await client.call_tool("write_file", {"path": str(target), "content": content})
+
+        asyncio.run(write_via_mcp())
+        if not target.is_file() or target.read_text(encoding="utf-8") != content:
+            raise IOError("Filesystem MCP report write did not persist the expected content")
         return target
 
 
@@ -197,7 +220,7 @@ def benchmark_node(state: ThamaniState) -> dict[str, Any]:
 
     tender = state.get("tender", {})
     awards = state.get("awards", [])
-    category = tender.get("category") or "goods"
+    category = tender.get("category") or ""
 
     for idx, aw in enumerate(awards, 1):
         val = aw.get("value_amount", 0.0)
@@ -294,8 +317,8 @@ def supplier_check_node(state: ThamaniState) -> dict[str, Any]:
             cursor.execute(
                 """
                 SELECT count(*), count(DISTINCT buyer_name)
-                FROM awards
-                WHERE supplier_name_norm = ?
+                FROM (SELECT DISTINCT ocid, award_id, buyer_name FROM awards
+                      WHERE supplier_name_norm = ?)
                 """,
                 (sup_norm,),
             )
@@ -319,8 +342,9 @@ def supplier_check_node(state: ThamaniState) -> dict[str, Any]:
             cursor.execute(
                 """
                 SELECT buyer_name, count(*) as wins, group_concat(ocid, ',') as sample_ocids
-                FROM awards
-                WHERE supplier_name_norm = ?
+                FROM (SELECT DISTINCT ocid, award_id, buyer_name FROM awards
+                      WHERE supplier_name_norm = ?)
+                WHERE TRIM(COALESCE(buyer_name, '')) != ''
                 GROUP BY buyer_name
                 ORDER BY wins DESC
                 LIMIT 1
@@ -341,7 +365,7 @@ def supplier_check_node(state: ThamaniState) -> dict[str, Any]:
             if top_wins >= 8:
                 concentration_flag = True
                 concentration_note = (
-                    f"Supplier '{sup_name}' (Normalized: '{sup_norm}'): Single-buyer captive concentration detected: "
+                    f"Supplier '{sup_name}' (Normalized: '{sup_norm}'): Repeated awards from one buyer: "
                     f"{top_wins} historical wins from procuring entity '{top_buyer}' "
                     f"({top_wins}/{total_wins} of all recorded awards, {distinct_buyers} distinct buyer(s))."
                 )
@@ -482,6 +506,22 @@ def draft_node(state: ThamaniState) -> dict[str, Any]:
 # -----------------------------------------------------------------------------
 # Node 6: Human Gate (§6)
 # -----------------------------------------------------------------------------
+def validate_gate_action(officer: str, action: str, findings: list[dict[str, Any]]) -> None:
+    """Validate the same officer decision contract at every entry point."""
+    if not officer.strip() or "\n" in officer or "\r" in officer:
+        raise ValueError("A non-empty officer name on one line is required")
+    parts = action.strip().split(maxsplit=2)
+    if parts and parts[0].lower() == "override":
+        if len(parts) != 3 or not parts[2].strip():
+            raise ValueError("Usage: override <existing-finding-id> <explanation>")
+        if parts[1] not in {f.get("id") for f in findings}:
+            raise ValueError(f"Unknown override finding ID: {parts[1]}")
+        if "\n" in parts[2] or "\r" in parts[2]:
+            raise ValueError("Override explanation must be on one line")
+    elif action.strip().lower() not in {"approve", "reject"}:
+        raise ValueError("Choose approve, override <id> <note>, or reject")
+
+
 def gate_node(state: ThamaniState) -> dict[str, Any]:
     """Human-in-the-loop CLI gate.
 
@@ -491,7 +531,7 @@ def gate_node(state: ThamaniState) -> dict[str, Any]:
     """
     ts = utc_now_iso()
     run_log = list(state.get("run_log", []))
-    officer_name = state.get("officer") or "Procurement Officer"
+    officer_name = state.get("officer", "").strip()
     draft = state.get("draft", "")
     findings = list(state.get("findings", []))
     interactive = state.get("interactive", False)
@@ -513,7 +553,8 @@ def gate_node(state: ThamaniState) -> dict[str, Any]:
 
     if auto_action:
         # Non-interactive / programmatic / test execution
-        cmd = auto_action.strip()
+        cmd = re.sub(r"^\S+", lambda match: match.group().lower(), auto_action.strip())
+        validate_gate_action(officer_name, cmd, findings)
         print(f"[Automated Gate Action]: {cmd}")
         if cmd == "approve":
             decision = {
@@ -562,6 +603,12 @@ def gate_node(state: ThamaniState) -> dict[str, Any]:
                 raw = "reject"
 
             if not raw:
+                continue
+
+            try:
+                validate_gate_action(officer_name, raw, findings)
+            except ValueError as exc:
+                print(str(exc))
                 continue
 
             low = raw.lower()
@@ -637,10 +684,14 @@ def finalize_node(state: ThamaniState) -> dict[str, Any]:
         return {"run_log": run_log}
 
     draft = state.get("draft", "")
+    if state.get("error") or not draft.strip():
+        raise ValueError("Cannot finalize an empty or failed briefing")
     ocid = state.get("ocid", "UNKNOWN-OCID")
     officer = gate.get("officer_name", "Procurement Officer")
     gate_note = gate.get("note", "N/A")
     override_id = gate.get("finding_id")
+    action = f"override {override_id} {gate_note}" if decision_type == "override" else decision_type
+    validate_gate_action(officer, action, state.get("findings", []))
 
     # Replace awaiting placeholder with formal determination in sealed draft
     decision_lines = [
@@ -677,11 +728,12 @@ def finalize_node(state: ThamaniState) -> dict[str, Any]:
 
     # Use borrowed filesystem MCP client to write report to disk
     fs_client = FilesystemMCPClient("reports")
-    filename = f"thamani_briefing_{ocid}.md"
+    version = uuid.uuid4().hex
+    filename = f"thamani_briefing_{ocid}_{version}.md"
     saved_path = fs_client.write_file(filename, final_content)
 
     # Also export official executive HTML dossier
-    dossier_filename = f"thamani_dossier_{re.sub(r'[^\w\-.]', '_', ocid)}.html"
+    dossier_filename = f"thamani_dossier_{re.sub(r'[^\w\-.]', '_', ocid)}_{version}.html"
     dossier_path = Path("reports") / dossier_filename
     export_dossier_to_file(final_content, dossier_path, ocid=ocid)
 
@@ -689,7 +741,7 @@ def finalize_node(state: ThamaniState) -> dict[str, Any]:
         "ts": ts,
         "node": "finalize",
         "inputs_summary": {"destination": str(saved_path), "dossier": str(dossier_path)},
-        "outputs_summary": {"finalized": True, "file_size": len(final_content)},
+        "outputs_summary": {"finalized": True, "file_size": len(final_content), "tool": "filesystem.write_file"},
     }
     run_log.append(log_entry)
     logger.info(f"[FINALIZE] Briefing successfully finalized to {saved_path}")
@@ -747,10 +799,10 @@ def persist_run_log(run_log: list[dict[str, Any]]) -> Path:
     """Save run log to runs/<utc-timestamp>.jsonl (gitignored)."""
     runs_dir = Path("runs")
     runs_dir.mkdir(parents=True, exist_ok=True)
-    ts_slug = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
-    log_file = runs_dir / f"{ts_slug}.jsonl"
+    ts_slug = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    log_file = runs_dir / f"{ts_slug}_{uuid.uuid4().hex}.jsonl"
 
-    with open(log_file, "w", encoding="utf-8") as f:
+    with open(log_file, "x", encoding="utf-8") as f:
         for entry in run_log:
             f.write(json.dumps(entry) + "\n")
 
@@ -775,8 +827,19 @@ def run_pipeline(
         "run_log": [],
     }
 
-    result: ThamaniState = app.invoke(initial_state)
-    log_path = persist_run_log(result.get("run_log", []))
+    # Persist each completed node's events, so a later exception cannot erase them.
+    result: ThamaniState = dict(initial_state)
+    log_path = persist_run_log([])
+    recorded = 0
+    for update in app.stream(initial_state, stream_mode="updates"):
+        for values in update.values():
+            result.update(values)
+            entries = result.get("run_log", [])
+            with log_path.open("a", encoding="utf-8") as f:
+                for entry in entries[recorded:]:
+                    f.write(json.dumps(entry) + "\n")
+                f.flush()
+            recorded = len(entries)
     logger.info(f"Execution run log persisted to {log_path}")
     return result
 
@@ -785,10 +848,16 @@ def finalize_reviewed_state(state: ThamaniState, officer: str, action: str) -> T
     """Apply the UI officer decision to the exact draft already shown for review."""
     if state.get("gate_decision", {}).get("decision") != "pending" or not state.get("draft"):
         raise ValueError("Only a pending, drafted briefing can be reviewed")
+    validate_gate_action(officer, action, state.get("findings", []))
     reviewed: ThamaniState = {**state, "officer": officer, "auto_gate_action": action, "interactive": False}
     reviewed.update(gate_node(reviewed))
+    # Preserve the officer decision even if the MCP server or export subsequently fails.
+    log_path = persist_run_log(reviewed.get("run_log", []))
+    recorded = len(reviewed.get("run_log", []))
     reviewed.update(finalize_node(reviewed))
-    persist_run_log(reviewed.get("run_log", []))
+    with log_path.open("a", encoding="utf-8") as f:
+        for entry in reviewed.get("run_log", [])[recorded:]:
+            f.write(json.dumps(entry) + "\n")
     return reviewed
 
 
@@ -812,8 +881,7 @@ def run_demo(officer: str = "Procurement Officer", model: str | None = None):
         ocid="ocds-5whusi-PCKTTI-2695",
         officer=officer,
         model=model,
-        auto_gate_action="override SC-CONC-1 Supplier verified under specialized technical mandate; single-bidder justification accepted.",
-        interactive=False,
+        interactive=True,
     )
 
     # 2. AFRICAN TOUCH SAFARIS Variant Merge Case
@@ -822,8 +890,7 @@ def run_demo(officer: str = "Procurement Officer", model: str | None = None):
         ocid="ocds-5whusi-1033",
         officer=officer,
         model=model,
-        auto_gate_action="approve",
-        interactive=False,
+        interactive=True,
     )
 
     # 3. Zero-value Data Quality Case (honest-failure beat)
@@ -832,13 +899,12 @@ def run_demo(officer: str = "Procurement Officer", model: str | None = None):
         ocid="ocds-5whusi-275077-PBSS/2025/2026/001",
         officer=officer,
         model=model,
-        auto_gate_action="override DQ-VAL-1 Data reporting omission by procuring school; procurement flagged for record reconciliation.",
-        interactive=False,
+        interactive=True,
     )
 
     print("\n" + "=" * 78)
     print("DEMO SCENARIO COMPLETE - ALL 3 CASES PROCESSED THROUGH GATE")
-    print("Finalized reports written to 'reports/' directory.")
+    print("Approved reports written to 'reports/' directory; rejected cases remain unfinalized.")
     print("=" * 78)
 
 
@@ -854,11 +920,12 @@ def main():
     parser.add_argument("--category", choices=["works", "goods", "services"], help="Procurement category for benchmark")
     parser.add_argument("--value", type=float, help="Award amount to benchmark")
     parser.add_argument("--currency", default="KES", help="Currency code (default KES)")
-    parser.add_argument("--officer", default="Procurement Officer", help="Designated officer name at the gate")
-    parser.add_argument("--auto-gate", help="Automated gate action for tests/demo (e.g. 'approve', 'override <id> <note>', 'reject')")
+    parser.add_argument("--officer", default="", help="Reviewing officer's name (required for --award and --demo)")
     parser.add_argument("--model", default=None, help=f"NVIDIA model ID, for example {DEFAULT_NVIDIA_MODEL}")
 
     args = parser.parse_args()
+    if (args.demo or args.award) and not args.officer.strip():
+        parser.error("--award and --demo require --officer with the reviewing officer's name")
 
     if args.benchmark:
         if not args.category or args.value is None:
@@ -881,8 +948,7 @@ def main():
         run_pipeline(
             ocid=args.award,
             officer=args.officer,
-            auto_gate_action=args.auto_gate,
-            interactive=(args.auto_gate is None),
+            interactive=True,
             model=args.model,
         )
         sys.exit(0)
